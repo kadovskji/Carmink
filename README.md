@@ -120,5 +120,4 @@ python -m pytest
 
 They cover the engine with a fake clock (a whole match, timeouts, hints, spoilers, players leaving), the HTTP API, `initData` validation, the command handlers, and (when Node.js is installed) the canvas flood fill.
 
-
-Additional words were curated (filtered for drawability and translated) from a community party-game word list (`game_words.yaml`). **TODO before publishing:** verify the origin and licence of that list.
+Additional words were curated (filtered for drawability and translated) from user [nick-aschenbach's game-words repository](https://github.com/nick-aschenbach/game-words/tree/master). 
