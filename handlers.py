@@ -51,6 +51,12 @@ class Handlers:
         else:
             await self._reply(update, T(lang, "start_group"))
 
+    async def help(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        chat = update.effective_chat
+        if chat.type != "private":
+            self.db.track_chat(chat.id, chat.title)
+        await self._reply(update, T(self._lang(chat.id), "help"))
+
     async def newgame(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._group(update):
             return

@@ -34,14 +34,15 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 
 | Command | Description |
 |---|---|
-| `/start` | Help (in private chat) |
+| `/start` | Welcome message (in private chat) |
+| `/help` | How to play and the list of commands (private chat and groups) |
 | `/newgame [it\|en]` | Open a match; the language is the group's, unless given |
 | `/join` | Join a match, also while it is running (you guess at once and draw at the end) |
 | `/ready` | Start now (any player, with at least 3 players) |
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed) |
 | `/quit` | Leave the match |
 | `/stop` | Cancel the match (its creator or a group admin) |
-| `/addword <word> [1-3]` | Add a word to the group dictionary, with a difficulty (default 2) |
+| `/addword <word> [\| synonym \| ...] [1-3]` | Add a word to the group dictionary, with optional accepted synonyms (up to 5) and a difficulty (default 2). Example: `/addword scooter \| kick scooter 3` |
 | `/deleteword <word>` | Remove a word that was added with `/addword` |
 | `/stats` | Group statistics |
 | `/mystats` | Your statistics (this group, or all groups if used in private) |

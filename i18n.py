@@ -29,6 +29,22 @@ STRINGS: dict[str, dict[str, str]] = {
               "/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt; · /stats · /mystats · /settings\n\n"
               "In the group, turn off the bot's privacy mode or make it an admin, or it can't see the guesses.",
     },
+    "help": {
+        "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\n"
+              "A turno uno disegna la parola scelta tra tre (60 secondi dal primo tratto), gli altri indovinano "
+              "scrivendo in chat. Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
+              "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori.\n\n"
+              "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
+              "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
+              "<b>Altro</b>\n/stats · /mystats · /settings · /help",
+        "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
+              "Players take turns drawing a word picked among three (60 seconds from the first stroke) while the others "
+              "guess by typing in the chat. The faster you guess, the more points you get; the drawer earns more when "
+              "many players guess, and can give hints at the cost of some points. At least 3 players are needed.\n\n"
+              "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
+              "<b>Group dictionary</b>\n/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt;\n"
+              "<b>Other</b>\n/stats · /mystats · /settings · /help",
+    },
     "start_group": {"it": "Per giocare usa /newgame in questo gruppo.",
                     "en": "To play, use /newgame in this group."},
     "group_only": {"it": "Usa questo comando in un gruppo.", "en": "Use this command in a group."},
