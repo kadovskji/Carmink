@@ -46,6 +46,10 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 | `/help` | How to play and the list of commands (private chat and groups) |
 | `/newgame [it\|en]` | Open a match and pick the mode; the language is the group's, unless given |
 | `/join` | Join a match, also while it is running (you guess at once and draw at the end), unless the group turned it off in `/settings` |
+| `/start` | Welcome message (in private chat) |
+| `/help` | How to play and the list of commands (private chat and groups) |
+| `/newgame [it\|en]` | Open a match; the language is the group's, unless given |
+| `/join` | Join a match, also while it is running (you guess at once and draw at the end) |
 | `/ready` | Start now (any player, with at least 3 players) |
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed) |
 | `/quit` | Leave the match |
