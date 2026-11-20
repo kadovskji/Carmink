@@ -95,12 +95,15 @@ async def run() -> None:
 
     async def post_init(app: Application) -> None:
         await admin.notify_restart(app.bot)
-        await app.bot.set_my_commands([BotCommand(c, en) for c, en, _ in COMMANDS])
-        await app.bot.set_my_commands([BotCommand(c, it) for c, _, it in COMMANDS],
-                                      language_code="it")
+        try:
+            await app.bot.set_my_commands([BotCommand(c, en) for c, en, _ in COMMANDS])
+            await app.bot.set_my_commands([BotCommand(c, it) for c, _, it in COMMANDS],
+                                          language_code="it")
+        except Exception as e:                  # a menu that fails to update must not stop the bot
+            LOG.warning("could not set the command menu: %s", e)
 
     # A larger pool keeps a deleteMessage from queueing behind a photo upload.
-    app = (Application.builder().token(config.BOT_TOKEN).post_init(post_init)
+    app = (Application.builder().token(config.BOT_TOKEN)
            .request(HTTPXRequest(connection_pool_size=16))
            .get_updates_request(HTTPXRequest(connection_pool_size=2))
            .concurrent_updates(True).build())
@@ -125,6 +128,7 @@ async def run() -> None:
              len(config.ADMIN_IDS))
     async with app:
         await app.start()
+        await post_init(app)    # run_polling() would do this for us; we drive the lifecycle ourselves
         allowed = ["message", "callback_query", "my_chat_member"]
         if config.WEBHOOK_SECRET:
             await app.bot.set_webhook(f"{config.PUBLIC_URL}/tg/{config.WEBHOOK_SECRET}",
