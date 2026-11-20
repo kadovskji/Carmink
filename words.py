@@ -119,6 +119,24 @@ def validate_custom(text: str) -> str | None:
     return word
 
 
+def parse_custom(text: str) -> tuple[str, tuple[str, ...]] | None:
+    """'word | synonym | synonym' -> (word, synonyms); None if any part is not acceptable.
+
+    Synonyms equal to the word itself (or repeated) are dropped; at most CUSTOM_ALTS_MAX are kept."""
+    parts = [p for p in (x.strip() for x in text.split("|")) if p]
+    if not parts or text.strip().startswith("|"):
+        return None
+    cleaned = [validate_custom(p) for p in parts]
+    if any(c is None for c in cleaned):
+        return None
+    main, seen, alts = cleaned[0], {compact(cleaned[0])}, []
+    for a in cleaned[1:]:
+        if compact(a) not in seen:
+            seen.add(compact(a))
+            alts.append(a)
+    return main, tuple(alts[:config.CUSTOM_ALTS_MAX])
+
+
 # ---------------------------------------------------------------- choosing
 def pick_choices(pool: list[Entry], used: set[str], rng: random.Random) -> list[Entry]:
     """Three words for the drawer, one per difficulty level when possible."""

@@ -61,6 +61,7 @@ SNAPSHOT_MAX_BYTES = 400_000
 SNAPSHOT_MIN_INTERVAL = 0.8  # the Mini App may not upload faster than this
 
 # ---------------------------------------------------------------- words
+CUSTOM_ALTS_MAX = 5            # synonyms accepted per custom word
 CUSTOM_WORDS_MAX = 500      # per group
 WORD_MAX_LEN = 30
 CLOSE_NOTICES_PER_TURN = 2  # "you're close!" replies a player can get in one turn

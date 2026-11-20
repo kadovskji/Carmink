@@ -125,6 +125,25 @@ def test_addword_permissions_validation_and_dictionary(env, h):
     assert "non è nel dizionario" in m.replies[-1]
 
 
+def test_addword_with_synonyms(env, h):
+    run(env, h.newgame(upd()[0], ctx()))
+    env.io.admins.add(2)
+    u, m = upd(2, "Bob")
+    run(env, h.addword(u, ctx("monopattino", "|", "scooter", "|", "Kick", "scooter", "|", "monopattino", "3")))
+    assert "Sinonimi accettati: scooter, Kick scooter" in m.replies[-1] and "difficoltà 3" in m.replies[-1]
+    (e,) = env.db.custom_entries(CHAT, "it")
+    assert e.word == "monopattino" and e.alts == ("scooter", "Kick scooter") and e.diff == 3
+    from words import is_correct
+    assert is_correct(e, "SCOOTER") and is_correct(e, "kickscooter")
+    # a synonym that already exists elsewhere in the dictionary is accepted
+    run(env, h.addword(u, ctx("seggiolone", "|", "sedia")))
+    assert "aggiunta" in m.replies[-1]
+    run(env, h.addword(u, ctx("|", "xx")))
+    assert "non valida" in m.replies[-1]
+    run(env, h.addword(u, ctx("cane", "|", "12")))
+    assert "non valida" in m.replies[-1]
+
+
 def test_dictionary_open_to_everyone_when_the_group_chooses_so(env, h):
     env.db.set_setting(CHAT, "words", "everyone")
     u, m = upd(9, "Zed")

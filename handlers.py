@@ -116,13 +116,15 @@ class Handlers:
             diff = int(args.pop())
         if not args:
             return await self._reply(update, T(lang, "word_usage_add"))
-        word = words.validate_custom(" ".join(args))
-        if not word:
+        parsed = words.parse_custom(" ".join(args))
+        if not parsed:
             return await self._reply(update, T(lang, "word_bad"))
+        word, alts = parsed
         if self.db.count_custom(chat.id) >= config.CUSTOM_WORDS_MAX:
             return await self._reply(update, T(lang, "word_full", max=config.CUSTOM_WORDS_MAX))
-        if self.db.add_word(chat.id, lang, word, diff, user.id):
-            await self._reply(update, T(lang, "word_added", word=html.escape(word), diff=diff))
+        if self.db.add_word(chat.id, lang, word, diff, user.id, alts):
+            extra = T(lang, "word_alts", alts=html.escape(", ".join(alts))) if alts else ""
+            await self._reply(update, T(lang, "word_added", word=html.escape(word), diff=diff) + extra)
         else:
             await self._reply(update, T(lang, "word_dup", word=html.escape(word)))
 

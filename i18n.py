@@ -19,14 +19,14 @@ STRINGS: dict[str, dict[str, str]] = {
               "indovinarla scrivendo in chat. Più sei veloce, più punti prendi; il disegnatore guadagna di più se "
               "indovinano in tanti.\n\n"
               "<b>Comandi</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
-              "/addword &lt;parola&gt; [1-3] · /deleteword &lt;parola&gt; · /stats · /mystats · /settings\n\n"
+              "/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt; · /stats · /mystats · /settings\n\n"
               "Nel gruppo disattiva la modalità privacy del bot o rendilo amministratore, altrimenti non vede i tentativi.",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\nAdd me to a group and type /newgame. "
               "The current drawer has 60 seconds to draw a word picked among three, the others try to guess it "
               "by typing in the chat. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess.\n\n"
               "<b>Commands</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
-              "/addword &lt;word&gt; [1-3] · /deleteword &lt;word&gt; · /stats · /mystats · /settings\n\n"
+              "/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt; · /stats · /mystats · /settings\n\n"
               "In the group, turn off the bot's privacy mode or make it an admin, or it can't see the guesses.",
     },
     "start_group": {"it": "Per giocare usa /newgame in questo gruppo.",
@@ -99,8 +99,9 @@ STRINGS: dict[str, dict[str, str]] = {
     "game_over": {"it": "🏁 <b>Partita finita!</b> Classifica finale:", "en": "🏁 <b>Match over!</b> Final scoreboard:"},
     "winner": {"it": "👑 Vince {names}!", "en": "👑 {names} wins!"},
     # ------------------------------------------------------------ dictionary
-    "word_usage_add": {"it": "Uso: /addword &lt;parola&gt; [1-3] (1 facile, 2 media, 3 difficile)",
-                       "en": "Usage: /addword &lt;word&gt; [1-3] (1 easy, 2 medium, 3 hard)"},
+    "word_usage_add": {"it": "Uso: /addword &lt;parola&gt; [| sinonimo | sinonimo…] [1-3] (1 facile, 2 media, 3 difficile)\nEsempio: /addword monopattino | scooter 3",
+                       "en": "Usage: /addword &lt;word&gt; [| synonym | synonym…] [1-3] (1 easy, 2 medium, 3 hard)\nExample: /addword scooter | kick scooter 3"},
+    "word_alts": {"it": "\nSinonimi accettati: {alts}", "en": "\nAccepted synonyms: {alts}"},
     "word_usage_del": {"it": "Uso: /deleteword &lt;parola&gt;", "en": "Usage: /deleteword &lt;word&gt;"},
     "word_admin": {"it": "Solo gli admin del gruppo possono modificare il dizionario (vedi /settings).",
                    "en": "Only group admins can edit the dictionary (see /settings)."},

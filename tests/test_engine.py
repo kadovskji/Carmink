@@ -403,3 +403,17 @@ def test_player_who_guessed_and_then_left_keeps_the_name_in_the_round_summary(en
     env.run(env.engine.quit(env.CHAT, a, "it"))
     env.run(env.io.advance(config.DRAW_SECONDS))
     assert f"✅ {name_a} +" in " ".join(env.io.texts())
+
+
+def test_old_database_gets_alts_column(tmp_path):
+    import sqlite3
+    from db import Database
+    p = str(tmp_path / "old.db")
+    con = sqlite3.connect(p)
+    con.execute("CREATE TABLE custom_words (chat_id INTEGER NOT NULL, lang TEXT NOT NULL, word TEXT NOT NULL, "
+                "diff INTEGER NOT NULL DEFAULT 2, added_by INTEGER, PRIMARY KEY (chat_id, lang, word))")
+    con.execute("INSERT INTO custom_words VALUES (1, 'it', 'zattera', 2, 5)")
+    con.commit(); con.close()
+    db = Database(p)
+    assert [(e.word, e.alts) for e in db.custom_entries(1, "it")] == [("zattera", ())]
+    assert db.add_word(1, "it", "barca", 1, 5, ("nave",))

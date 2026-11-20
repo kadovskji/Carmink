@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS custom_words (       -- the group's own dictionary
     word TEXT NOT NULL,
     diff INTEGER NOT NULL DEFAULT 2,
     added_by INTEGER,
+    alts TEXT NOT NULL DEFAULT '',              -- synonyms, separated by |
     PRIMARY KEY (chat_id, lang, word));
 CREATE TABLE IF NOT EXISTS games (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +46,9 @@ class Database:
     def __init__(self, path: str = "carmink.db") -> None:
         self.con = sqlite3.connect(path, check_same_thread=False)   # one event loop uses it; tests use threads
         self.con.executescript(SCHEMA)
+        cols = [r[1] for r in self.con.execute("PRAGMA table_info(custom_words)")]
+        if "alts" not in cols:                  # database created before synonyms existed
+            self.con.execute("ALTER TABLE custom_words ADD COLUMN alts TEXT NOT NULL DEFAULT ''")
         self.con.commit()
 
     def query(self, sql: str, params: tuple = ()) -> list[tuple]:
@@ -88,22 +92,25 @@ class Database:
 
     # ------------------------------------------------------------ group dictionary
     def custom_entries(self, chat_id: int, lang: str) -> list[words.Entry]:
-        rows = self.query("SELECT word, diff FROM custom_words WHERE chat_id = ? AND lang = ?",
+        rows = self.query("SELECT word, diff, alts FROM custom_words WHERE chat_id = ? AND lang = ?",
                           (chat_id, lang))
-        return [words.Entry(word=w, diff=d, cat="custom") for w, d in rows]
+        return [words.Entry(word=w, alts=tuple(a for a in alts.split("|") if a), diff=d, cat="custom")
+                for w, d, alts in rows]
 
     def count_custom(self, chat_id: int) -> int:
         return self.query("SELECT COUNT(*) FROM custom_words WHERE chat_id = ?", (chat_id,))[0][0]
 
-    def add_word(self, chat_id: int, lang: str, word: str, diff: int, user_id: int) -> bool:
+    def add_word(self, chat_id: int, lang: str, word: str, diff: int, user_id: int,
+                 alts: tuple[str, ...] = ()) -> bool:
         """False if the group already has this word (same letters, ignoring case and accents)."""
         key = words.compact(word)
         for (w,) in self.query("SELECT word FROM custom_words WHERE chat_id = ? AND lang = ?",
                                (chat_id, lang)):
             if words.compact(w) == key:
                 return False
-        self.con.execute("INSERT INTO custom_words (chat_id, lang, word, diff, added_by) "
-                         "VALUES (?, ?, ?, ?, ?)", (chat_id, lang, word, diff, user_id))
+        self.con.execute("INSERT INTO custom_words (chat_id, lang, word, diff, added_by, alts) "
+                         "VALUES (?, ?, ?, ?, ?, ?)",
+                         (chat_id, lang, word, diff, user_id, "|".join(alts)))
         self.con.commit()
         return True
 

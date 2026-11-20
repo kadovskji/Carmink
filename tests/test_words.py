@@ -86,3 +86,11 @@ def test_pick_choices_with_a_tiny_pool():
     picked = words.pick_choices(pool, set(), random.Random(1))
     assert {e.word for e in picked} == {"uno", "due"}
     assert words.pick_choices([], set(), random.Random(1)) == []
+
+
+def test_parse_custom_synonyms():
+    assert words.parse_custom("orso polare") == ("orso polare", ())
+    assert words.parse_custom(" Scooter | kick  scooter |scooter| SCOOTER ") == ("Scooter", ("kick scooter",))
+    assert words.parse_custom("aa | bb | cc | dd | ee | ff | gg | hh")[1] == ("bb", "cc", "dd", "ee", "ff")
+    assert words.parse_custom("| xx") is None and words.parse_custom("xx | 12") is None
+    assert words.parse_custom("") is None
