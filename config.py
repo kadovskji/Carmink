@@ -18,6 +18,10 @@ BOT_USERNAME = os.environ.get("BOT_USERNAME", "carminkgame")
 MINIAPP_SHORTNAME = os.environ.get("MINIAPP_SHORTNAME", "app")   # the /newapp short name in BotFather
 WEB_HOST = os.environ.get("WEB_HOST", "127.0.0.1")               # nginx talks to this address
 WEB_PORT = _int("WEB_PORT", 8081)
+# Webhook mode (faster than polling): set WEBHOOK_SECRET to a long random string. Telegram then pushes
+# updates to PUBLIC_URL/tg/<secret>. Leave empty to keep long polling.
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "").strip()
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://carmink.suketchi.art").rstrip("/")
 DB_FILE = os.environ.get("DB_FILE", "carmink.db")
 LOG_FILE = os.environ.get("LOG_FILE", "carmink.log")
 RESTART_FILE = os.environ.get("RESTART_FILE", "restart.flag")

@@ -1,6 +1,6 @@
 """Carmink - a Telegram drawing and guessing party game bot.
 
-One process runs both the bot (long polling) and the Mini App backend (uvicorn on
+One process runs both the bot (long polling, or webhook if WEBHOOK_SECRET is set) and the Mini App backend (uvicorn on
 127.0.0.1:WEB_PORT, behind nginx).
 
 Run:  BOT_TOKEN=xxxx python carmink.py
@@ -13,7 +13,10 @@ import logs
 logs.setup()
 
 import uvicorn                                                          # noqa: E402
-from telegram import BotCommand                                         # noqa: E402
+from starlette.requests import Request                                  # noqa: E402
+from starlette.responses import Response                                # noqa: E402
+from telegram import BotCommand, Update                                 # noqa: E402
+from telegram.request import HTTPXRequest                                # noqa: E402
 from telegram.ext import (Application, CallbackQueryHandler, ChatMemberHandler,  # noqa: E402
                           CommandHandler, ContextTypes, MessageHandler, filters)
 
@@ -96,24 +99,44 @@ async def run() -> None:
         await app.bot.set_my_commands([BotCommand(c, it) for c, _, it in COMMANDS],
                                       language_code="it")
 
-    app = Application.builder().token(config.BOT_TOKEN).post_init(post_init).build()
+    # A larger pool keeps a deleteMessage from queueing behind a photo upload.
+    app = (Application.builder().token(config.BOT_TOKEN).post_init(post_init)
+           .request(HTTPXRequest(connection_pool_size=16))
+           .get_updates_request(HTTPXRequest(connection_pool_size=2))
+           .concurrent_updates(True).build())
     engine = Engine(TelegramIO(app), db)
     admin = Admin(db, engine)
     register(app, Handlers(engine, db), admin)
 
+    web = create_app(engine, config.BOT_TOKEN)
+    if config.WEBHOOK_SECRET:
+        async def telegram_webhook(request: Request) -> Response:
+            if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != config.WEBHOOK_SECRET:
+                return Response(status_code=403)
+            update = Update.de_json(await request.json(), app.bot)
+            await app.update_queue.put(update)
+            return Response()
+        web.add_route(f"/tg/{config.WEBHOOK_SECRET}", telegram_webhook, methods=["POST"])
+
     server = uvicorn.Server(uvicorn.Config(
-        create_app(engine, config.BOT_TOKEN), host=config.WEB_HOST, port=config.WEB_PORT,
+        web, host=config.WEB_HOST, port=config.WEB_PORT,
         log_level="warning"))
     LOG.info("Carmink starting: web on %s:%s, admins: %d", config.WEB_HOST, config.WEB_PORT,
              len(config.ADMIN_IDS))
     async with app:
         await app.start()
-        await app.updater.start_polling(
-            allowed_updates=["message", "callback_query", "my_chat_member"])
+        allowed = ["message", "callback_query", "my_chat_member"]
+        if config.WEBHOOK_SECRET:
+            await app.bot.set_webhook(f"{config.PUBLIC_URL}/tg/{config.WEBHOOK_SECRET}",
+                                      secret_token=config.WEBHOOK_SECRET, allowed_updates=allowed)
+            LOG.info("Webhook mode: %s/tg/<secret>", config.PUBLIC_URL)
+        else:
+            await app.updater.start_polling(allowed_updates=allowed)
         try:
             await server.serve()            # returns on SIGINT / SIGTERM
         finally:
-            await app.updater.stop()
+            if not config.WEBHOOK_SECRET:
+                await app.updater.stop()
             await app.stop()
 
 
