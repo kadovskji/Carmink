@@ -15,30 +15,63 @@ STRINGS: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------ start / help
     "start_private": {
         "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\nAggiungimi a un gruppo e scrivi /newgame. "
-              "Il disegnatore di turno ha 60 secondi per disegnare la parola che sceglie tra tre, gli altri provano a "
+              "Il disegnatore di turno ha 90 secondi per disegnare la parola che sceglie tra tre, gli altri provano a "
               "indovinarla scrivendo in chat. Più sei veloce, più punti prendi; il disegnatore guadagna di più se "
               "indovinano in tanti.\n\n"
               "<b>Comandi</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
               "/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt; · /stats · /mystats · /settings\n\n"
               "Nel gruppo disattiva la modalità privacy del bot o rendilo amministratore, altrimenti non vede i tentativi.",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\nAdd me to a group and type /newgame. "
-              "The current drawer has 60 seconds to draw a word picked among three, the others try to guess it "
+              "The current drawer has 90 seconds to draw a word picked among three, the others try to guess it "
               "by typing in the chat. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess.\n\n"
               "<b>Commands</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
               "/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt; · /stats · /mystats · /settings\n\n"
               "In the group, turn off the bot's privacy mode or make it an admin, or it can't see the guesses.",
     },
+    "help": {
+        "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\n"
+              "A turno uno disegna la parola scelta tra tre (90 secondi dal primo tratto), gli altri indovinano "
+              "scrivendo in chat. Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
+              "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori.\n\n"
+              "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
+              "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
+              "<b>Altro</b>\n/stats · /mystats · /settings · /help",
+        "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
+              "Players take turns drawing a word picked among three (90 seconds from the first stroke) while the others "
+              "guess by typing in the chat. The faster you guess, the more points you get; the drawer earns more when "
+              "many players guess, and can give hints at the cost of some points. At least 3 players are needed.\n\n"
+              "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
+              "<b>Group dictionary</b>\n/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt;\n"
+              "<b>Other</b>\n/stats · /mystats · /settings · /help",
+    },
     "start_group": {"it": "Per giocare usa /newgame in questo gruppo.",
                     "en": "To play, use /newgame in this group."},
     "group_only": {"it": "Usa questo comando in un gruppo.", "en": "Use this command in a group."},
     # ------------------------------------------------------------ lobby
     "lobby_open": {
-        "it": "🎨 <b>{name}</b> ha aperto una partita! Scrivete /join per entrare, /ready per iniziare subito "
+        "it": "🎨 <b>{name}</b> ha aperto una partita {mode}! Scrivete /join per entrare, /ready per iniziare subito "
               "(minimo {min} giocatori). Le iscrizioni chiudono tra {time}: /wait &lt;minuti&gt; le prolunga.",
-        "en": "🎨 <b>{name}</b> opened a match! Type /join to enter, /ready to start right away "
+        "en": "🎨 <b>{name}</b> opened a {mode} match! Type /join to enter, /ready to start right away "
               "(minimum {min} players). Sign-ups close in {time}: /wait &lt;minutes&gt; extends them.",
     },
+    "mode_speedrun": {"it": "🔥 Speedrun", "en": "🔥 Speedrun"},
+    "mode_classic": {"it": "🕹️ Classica", "en": "🕹️ Classic"},
+    "mode_broken": {"it": "☎️ Broken Canva", "en": "☎️ Broken Canva"},
+    "mode_pick": {
+        "it": "Scegli la modalità, <b>{name}</b>:\n"
+              "🔥 <b>Speedrun</b>: indovini in chat, il primo che indovina vince il round.\n"
+              "🕹️ <b>Classica</b>: si indovina nella Mini App e tutti possono continuare a provare.\n"
+              "☎️ <b>Broken Canva</b>: telefono senza fili di frasi e disegni, nessun vincitore.",
+        "en": "Pick the mode, <b>{name}</b>:\n"
+              "🔥 <b>Speedrun</b>: guess in the chat, the first to guess wins the round.\n"
+              "🕹️ <b>Classic</b>: guess in the Mini App, everybody keeps trying.\n"
+              "☎️ <b>Broken Canva</b>: telephone game of phrases and drawings, nobody wins.",
+    },
+    "mode_soon": {"it": "Questa modalità arriva presto.", "en": "This mode is coming soon."},
+    "mode_only_creator": {"it": "Solo chi ha usato /newgame può scegliere.", "en": "Only whoever used /newgame can choose."},
+    "join_closed": {"it": "In questo gruppo non si può entrare a partita in corso.",
+                    "en": "Joining a running match is turned off in this group."},
     "game_exists": {"it": "C'è già una partita in questo gruppo.", "en": "There is already a match in this group."},
     "already_in_game": {"it": "Sei già in una partita attiva.", "en": "You are already in an active match."},
     "no_game": {"it": "Nessuna partita in corso: usa /newgame.", "en": "No match running: use /newgame."},
@@ -88,6 +121,8 @@ STRINGS: dict[str, dict[str, str]] = {
     "close": {"it": "🔥 Ci sei vicino!", "en": "🔥 So close!"},
     "result_all": {"it": "🎉 Hanno indovinato tutti! La parola era <b>{word}</b>.",
                    "en": "🎉 Everybody got it! The word was <b>{word}</b>."},
+    "result_win": {"it": "🔥 Round vinto! La parola era <b>{word}</b>.",
+                   "en": "🔥 Round won! The word was <b>{word}</b>."},
     "result_time": {"it": "⏰ Tempo scaduto! La parola era <b>{word}</b>.",
                     "en": "⏰ Time is up! The word was <b>{word}</b>."},
     "result_skip": {"it": "⏭ Turno concluso dal disegnatore. La parola era <b>{word}</b>.",
@@ -142,5 +177,11 @@ STRINGS: dict[str, dict[str, str]] = {
     "set_words": {"it": "Dizionario del gruppo", "en": "Group dictionary"},
     "set_words_admins": {"it": "Solo admin", "en": "Admins only"},
     "set_words_everyone": {"it": "Tutti", "en": "Everyone"},
+    "set_latejoin": {"it": "Ingresso a partita in corso", "en": "Joining a running match"},
+    "set_latejoin_on": {"it": "Consentito", "en": "Allowed"},
+    "set_latejoin_off": {"it": "Vietato", "en": "Not allowed"},
+    "settings_sub_latejoin": {
+        "it": "Se consentito, /join funziona anche a partita iniziata (Speedrun e Classica): si indovina subito e si disegna alla fine.",
+        "en": "If allowed, /join also works once a match has started (Speedrun and Classic): you guess at once and draw at the end."},
     "settings_sub_words": {"it": "Chi può usare /addword e /deleteword.", "en": "Who can use /addword and /deleteword."},
 }

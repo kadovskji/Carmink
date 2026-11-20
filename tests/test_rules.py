@@ -18,8 +18,8 @@ def test_guess_points_fall_with_time_and_rise_with_difficulty():
 
 def test_every_hint_costs_twenty_percent():
     assert [round(hint_factor(h), 6) for h in range(4)] == [1.0, 0.8, 0.6, 0.4]
-    assert guess_points(60, 1, 1) == 80
-    assert guess_points(60, 1, 3) == 40
+    assert guess_points(config.DRAW_SECONDS, 1, 1) == 80
+    assert guess_points(config.DRAW_SECONDS, 1, 3) == 40
     assert drawer_points(2, 1, 1) == round(60 * 0.8)
 
 

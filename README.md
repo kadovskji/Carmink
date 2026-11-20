@@ -4,7 +4,7 @@ A Telegram party game bot where players take turns drawing a word while everybod
 
 ## How a match works
 
-1. Somebody sends `/newgame`, the others `/join`. At least 3 players are needed; `/ready` starts right away, otherwise the match starts when the sign-up window (5 minutes, extendable with `/wait`) closes.
+1. Somebody sends `/newgame` and picks the **mode** with the buttons (only the creator can pick); the others `/join`. At least 3 players are needed; `/ready` starts right away, otherwise the match starts when the sign-up window (5 minutes, extendable with `/wait`) closes.
 2. Every player draws in turn. With fewer than 5 players everybody draws **twice** (3 players → 6 rounds, 4 → 8); with 5 or more, once.
 3. Each turn:
 
@@ -13,17 +13,25 @@ A Telegram party game bot where players take turns drawing a word while everybod
 | Break | 10 s | The previous word is revealed with the scores, and the next drawer is announced |
 | Choice | 10 s | The drawer picks one of **three words**, one per difficulty (easy, medium, hard) |
 | Start | 20 s | The drawer must start drawing, otherwise the turn is skipped |
-| Drawing | 60 s | The clock starts at the first stroke. The others guess by writing in the chat |
+| Drawing | 90 s | The clock starts at the first stroke. The others guess by writing in the chat |
 
-4. A correct guess is deleted from the chat (so it doesn't spoil the word) and announced. When everybody has guessed, the round ends early.
+4. A correct guess is deleted from the chat (so it doesn't spoil the word). In **Speedrun** the first player who guesses wins the round and it ends at once.
 5. When all the turns are done the final scoreboard is shown.
+
+### Game modes
+
+| Mode | Status | How it plays |
+|---|---|---|
+| 🔥 Speedrun | available | Guesses are typed in the chat. The first correct guess wins the round |
+| 🕹️ Classic | coming soon | Guesses are typed in the Mini App and everybody keeps trying after somebody got it |
+| ☎️ Broken Canva | coming soon | Telephone game of phrases and drawings, nobody wins; the bot builds a GIF of every chain |
 
 ### Points
 
 | Who | Points |
 |---|---|
-| Guesser | Up to 100, falling to 40% as the 60 seconds run out; ×1 / ×1.25 / ×1.5 for easy / medium / hard words |
-| Drawer | 30 for every player who guessed, with the same difficulty multiplier |
+| Guesser | Up to 100, falling to 40% as the 90 seconds run out; ×1 / ×1.25 / ×1.5 for easy / medium / hard words |
+| Drawer | Speedrun: up to 50 when the word is guessed at once, falling to 40% of that as the time runs out. Classic: 30 for every player who guessed, with the difficulty multiplier |
 | Hints | Every hint the drawer gives (max 3) cuts 20% of the points of the guesses that follow **and** of the drawer's own points |
 
 The words come from three categories: everyday objects and places, living things (animals, plants, body parts, mythical creatures), actions and emotions. The built-in dictionary is in `data/`; every group can add its own words.
@@ -34,18 +42,19 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 
 | Command | Description |
 |---|---|
-| `/start` | Help (in private chat) |
-| `/newgame [it\|en]` | Open a match; the language is the group's, unless given |
-| `/join` | Join a match, also while it is running (you guess at once and draw at the end) |
+| `/start` | Welcome message (in private chat) |
+| `/help` | How to play and the list of commands (private chat and groups) |
+| `/newgame [it\|en]` | Open a match and pick the mode; the language is the group's, unless given |
+| `/join` | Join a match, also while it is running (you guess at once and draw at the end), unless the group turned it off in `/settings` |
 | `/ready` | Start now (any player, with at least 3 players) |
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed) |
 | `/quit` | Leave the match |
 | `/stop` | Cancel the match (its creator or a group admin) |
-| `/addword <word> [1-3]` | Add a word to the group dictionary, with a difficulty (default 2) |
+| `/addword <word> [\| synonym \| ...] [1-3]` | Add a word to the group dictionary, with optional accepted synonyms (up to 5) and a difficulty (default 2). Example: `/addword scooter \| kick scooter 3` |
 | `/deleteword <word>` | Remove a word that was added with `/addword` |
 | `/stats` | Group statistics |
 | `/mystats` | Your statistics (this group, or all groups if used in private) |
-| `/settings` | Group settings for admins: language, who can edit the dictionary |
+| `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match |
 | `/admin` | **Bot owner only**, private chat only: announcements, restart, git pull, log. Not shown in the command menu |
 
 ## The canvas (Mini App)

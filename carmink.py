@@ -32,13 +32,14 @@ LOG = logging.getLogger("carmink")
 
 # (command, English description, Italian description). /admin is deliberately not listed.
 COMMANDS = [
+    ("help", "How to play and the commands", "Come si gioca e i comandi"),
     ("newgame", "Open a new match", "Apri una nuova partita"),
     ("join", "Join the match", "Unisciti alla partita"),
     ("ready", "Start the match now", "Avvia subito la partita"),
     ("wait", "Extend sign-ups: /wait <minutes>", "Prolunga le iscrizioni: /wait <minuti>"),
     ("quit", "Leave the match", "Lascia la partita"),
     ("stop", "Cancel the match", "Annulla la partita"),
-    ("addword", "Add a word: /addword <word> [1-3]", "Aggiungi una parola: /addword <parola> [1-3]"),
+    ("addword", "Add a word: /addword <word> [| synonym] [1-3]", "Aggiungi una parola: /addword <parola> [| sinonimo] [1-3]"),
     ("deleteword", "Remove a word you added", "Togli una parola che hai aggiunto"),
     ("stats", "Group statistics", "Statistiche del gruppo"),
     ("mystats", "Your statistics", "Le tue statistiche"),
@@ -65,7 +66,7 @@ def register(app: Application, h: Handlers, admin: Admin) -> None:
         app.add_handler(CommandHandler(
             name, handler, filters=explicit if name in config.REQUIRE_TAG else None))
 
-    for name, handler in (("start", h.start), ("newgame", h.newgame), ("join", h.join),
+    for name, handler in (("start", h.start), ("help", h.help), ("newgame", h.newgame), ("join", h.join),
                           ("ready", h.ready), ("wait", h.wait), ("quit", h.quit),
                           ("stop", h.stop), ("addword", h.addword),
                           ("deleteword", h.deleteword), ("stats", h.stats),
@@ -74,6 +75,7 @@ def register(app: Application, h: Handlers, admin: Admin) -> None:
     app.add_handler(CommandHandler("admin", admin.admin, filters=filters.ChatType.PRIVATE))
 
     app.add_handler(CallbackQueryHandler(h.cb_settings, pattern=r"^s:"))
+    app.add_handler(CallbackQueryHandler(h.cb_mode, pattern=r"^m:"))
     app.add_handler(CallbackQueryHandler(admin.callback, pattern=r"^ad:"))
 
     app.add_handler(MessageHandler(filters.ChatType.GROUPS, h.track_group), group=-2)

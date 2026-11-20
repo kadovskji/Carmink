@@ -4,17 +4,19 @@ import time
 
 import words
 
-DEFAULT_SETTINGS = {"lang": "it", "words": "admins"}
+DEFAULT_SETTINGS = {"lang": "it", "words": "admins", "latejoin": "on"}
 ALLOWED_SETTINGS = {
     "lang": ("it", "en"),
     "words": ("admins", "everyone"),    # who can use /addword and /deleteword
+    "latejoin": ("on", "off"),          # may players join a running speedrun / classic match?
 }
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chat_settings (
     chat_id INTEGER PRIMARY KEY,
     lang TEXT NOT NULL DEFAULT 'it',
-    words TEXT NOT NULL DEFAULT 'admins');
+    words TEXT NOT NULL DEFAULT 'admins',
+    latejoin TEXT NOT NULL DEFAULT 'on');
 CREATE TABLE IF NOT EXISTS known_chats (        -- groups where the bot is (or was) present
     chat_id INTEGER PRIMARY KEY,
     title TEXT,
@@ -47,6 +49,9 @@ class Database:
         self.con = sqlite3.connect(path, check_same_thread=False)   # one event loop uses it; tests use threads
         self.con.executescript(SCHEMA)
         cols = [r[1] for r in self.con.execute("PRAGMA table_info(custom_words)")]
+        scols = [r[1] for r in self.con.execute("PRAGMA table_info(chat_settings)")]
+        if "latejoin" not in scols:             # database created before this setting existed
+            self.con.execute("ALTER TABLE chat_settings ADD COLUMN latejoin TEXT NOT NULL DEFAULT 'on'")
         if "alts" not in cols:                  # database created before synonyms existed
             self.con.execute("ALTER TABLE custom_words ADD COLUMN alts TEXT NOT NULL DEFAULT ''")
         self.con.commit()
@@ -56,8 +61,9 @@ class Database:
 
     # ------------------------------------------------------------ settings
     def get_settings(self, chat_id: int) -> dict:
-        rows = self.query("SELECT lang, words FROM chat_settings WHERE chat_id = ?", (chat_id,))
-        return dict(zip(("lang", "words"), rows[0])) if rows else dict(DEFAULT_SETTINGS)
+        rows = self.query("SELECT lang, words, latejoin FROM chat_settings WHERE chat_id = ?",
+                          (chat_id,))
+        return dict(zip(("lang", "words", "latejoin"), rows[0])) if rows else dict(DEFAULT_SETTINGS)
 
     def get_lang(self, chat_id: int) -> str:
         return self.get_settings(chat_id)["lang"]

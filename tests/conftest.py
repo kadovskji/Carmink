@@ -88,10 +88,10 @@ class Env:
     def game(self):
         return self.engine.games.get(self.CHAT)
 
-    def start_match(self, n: int = 3, lang: str = "it"):
+    def start_match(self, n: int = 3, lang: str = "it", mode: str = "classic"):
         """Open a match with n players (ids 1..n) and start it."""
         e = self.engine
-        self.run(e.new_game(self.CHAT, 1, "Ada", lang))
+        self.run(e.new_game(self.CHAT, 1, "Ada", lang, mode))
         for uid in range(2, n + 1):
             self.run(e.join(self.CHAT, uid, f"P{uid}", lang))
         self.run(e.ready(self.CHAT, 1, lang))

@@ -95,7 +95,7 @@ def test_full_turn_guess_scores_and_next_drawer(env):
     env.guess(guessers[0], "boh", mid=11)                 # wrong: ignored
     assert g.scores[guessers[0]] == 0
     env.guess(guessers[0], word.upper() + "!", mid=12)    # right: message deleted, points given
-    expected = guess_points(50, t.word.diff, 0)
+    expected = guess_points(config.DRAW_SECONDS - 10, t.word.diff, 0)
     assert g.scores[guessers[0]] == expected and 12 in env.io.deleted
     env.run(env.io.advance(10))
     env.guess(guessers[1], word, mid=13)                  # last one: round ends at once
@@ -206,7 +206,7 @@ def test_hints_reduce_points_for_guessers_and_drawer(env):
     assert "-20%" in env.io.texts()[-1]
     a, b = [u for u in g.players if u != t.drawer]
     env.guess(a, word.word)
-    assert g.scores[a] == guess_points(60, word.diff, 1)
+    assert g.scores[a] == guess_points(config.DRAW_SECONDS, word.diff, 1)
     env.guess(b, word.word)
     assert g.scores[t.drawer] == round(30 * 2 * config.DIFFICULTY_MULT[word.diff] * 0.8)
 
@@ -417,3 +417,51 @@ def test_old_database_gets_alts_column(tmp_path):
     db = Database(p)
     assert [(e.word, e.alts) for e in db.custom_entries(1, "it")] == [("zattera", ())]
     assert db.add_word(1, "it", "barca", 1, 5, ("nave",))
+
+
+# ---------------------------------------------------------------- speedrun
+def test_speedrun_first_correct_guess_wins_the_round(env):
+    g = env.start_match(4, mode="speedrun")
+    t = env.to_drawing()
+    word = t.word
+    a, b, _ = [u for u in g.players if u != t.drawer]
+    env.run(env.io.advance(15))
+    env.guess(a, "boh", mid=1)
+    assert g.phase == Phase.DRAWING
+    env.guess(a, word.word, mid=2)
+    assert 2 in env.io.deleted and g.phase == Phase.BREAK
+    assert g.scores[a] == guess_points(config.DRAW_SECONDS - 15, word.diff, 0)
+    d = g.scores[t.drawer]
+    assert 0 < d <= config.DRAWER_SPEEDRUN_MAX
+    assert "Round vinto" in "\n".join(env.io.texts())
+    env.guess(b, word.word, mid=3)                      # too late: the turn is over
+    assert g.scores[b] == 0
+
+
+def test_speedrun_nobody_guesses_means_no_points(env):
+    g = env.start_match(3, mode="speedrun")
+    t = env.to_drawing()
+    env.run(env.io.advance(config.DRAW_SECONDS))
+    assert all(p == 0 for p in g.scores.values())
+
+
+def test_speedrun_drawer_points_rule():
+    from game import speedrun_drawer_points
+    assert speedrun_drawer_points(config.DRAW_SECONDS, 0) == config.DRAWER_SPEEDRUN_MAX
+    assert speedrun_drawer_points(0, 0) == round(config.DRAWER_SPEEDRUN_MAX * config.GUESS_MIN_SHARE)
+    assert speedrun_drawer_points(config.DRAW_SECONDS, 2) == round(config.DRAWER_SPEEDRUN_MAX * 0.6)
+    assert speedrun_drawer_points(-5, 3) >= 1
+
+
+def test_old_database_gets_the_latejoin_column(tmp_path):
+    import sqlite3
+    from db import Database
+    p = str(tmp_path / "old2.db")
+    con = sqlite3.connect(p)
+    con.execute("CREATE TABLE chat_settings (chat_id INTEGER PRIMARY KEY, lang TEXT NOT NULL DEFAULT 'it', "
+                "words TEXT NOT NULL DEFAULT 'admins')")
+    con.execute("INSERT INTO chat_settings VALUES (1, 'en', 'everyone')")
+    con.commit(); con.close()
+    db = Database(p)
+    assert db.get_settings(1) == {"lang": "en", "words": "everyone", "latejoin": "on"}
+    assert db.set_setting(1, "latejoin", "off") and db.get_settings(1)["latejoin"] == "off"

@@ -14,7 +14,8 @@ from typing import Awaitable, Callable, Protocol
 import config
 import words
 from db import Database
-from game import (Game, Phase, Turn, drawer_points, guess_points, laps, ranking)
+from game import (Game, Phase, Turn, drawer_points, guess_points, laps, ranking,
+                  speedrun_drawer_points)
 from i18n import T
 
 LOG = logging.getLogger("carmink.game")
@@ -114,18 +115,28 @@ class Engine:
         return text
 
     # ================================================================ lobby commands
-    async def new_game(self, chat_id: int, uid: int, name: str, lang: str) -> None:
+    async def can_open(self, chat_id: int, uid: int, lang: str) -> bool:
+        """True if `uid` may open a match here; otherwise says why in the chat."""
         if chat_id in self.games:
-            return await self._say(chat_id, lang, "game_exists")
-        if uid in self.user_game:
-            return await self._say(chat_id, lang, "already_in_game")
-        g = Game(chat_id=chat_id, lang=lang, creator=uid, players={uid: name},
+            await self._say(chat_id, lang, "game_exists")
+        elif uid in self.user_game:
+            await self._say(chat_id, lang, "already_in_game")
+        else:
+            return True
+        return False
+
+    async def new_game(self, chat_id: int, uid: int, name: str, lang: str,
+                       mode: str = config.DEFAULT_MODE) -> None:
+        if not await self.can_open(chat_id, uid, lang):
+            return
+        g = Game(chat_id=chat_id, lang=lang, creator=uid, mode=mode, players={uid: name},
                  names={uid: name}, lobby_end=self.io.now() + config.LOBBY_SECONDS)
         self.games[chat_id] = g
         self.user_game[uid] = chat_id
         self._timer(g, "lobby", config.LOBBY_SECONDS, self._lobby_expired)
-        LOG.info("new game in %s (%s) by %s", chat_id, lang, uid)
+        LOG.info("new game in %s (%s, %s) by %s", chat_id, mode, lang, uid)
         await self.io.send(chat_id, T(lang, "lobby_open", name=esc(name), min=config.MIN_PLAYERS,
+                                      mode=T(lang, f"mode_{mode}"),
                                       time=fmt_duration(config.LOBBY_SECONDS)))
 
     async def join(self, chat_id: int, uid: int, name: str, lang: str) -> None:
@@ -136,6 +147,8 @@ class Engine:
             return await self._say(chat_id, g.lang, "join_already")
         if uid in self.user_game:
             return await self._say(chat_id, g.lang, "join_other")
+        if g.phase != Phase.LOBBY and self.db.get_settings(chat_id)["latejoin"] == "off":
+            return await self._say(chat_id, g.lang, "join_closed")
         g.players[uid] = g.names[uid] = name
         self.user_game[uid] = chat_id
         if g.phase == Phase.LOBBY:
@@ -274,11 +287,14 @@ class Engine:
         t = g.turn
         g.go(Phase.BREAK)
         n = len(t.guessed)
-        d_pts = drawer_points(n, t.word.diff, t.hints)
+        if g.mode == "speedrun":
+            d_pts = speedrun_drawer_points(t.win_remaining, t.hints) if n else 0
+        else:
+            d_pts = drawer_points(n, t.word.diff, t.hints)
         if d_pts and t.drawer in g.players:
             g.scores[t.drawer] = g.scores.get(t.drawer, 0) + d_pts
         key = {"all": "result_all", "time": "result_time", "skip": "result_skip",
-               "left": "result_left"}[reason]
+               "left": "result_left", "win": "result_win"}[reason]
         header = T(g.lang, key, word=esc(t.word.word))
         if n:
             gained = [f"✅ {esc(g.name(u))} +{p}" for u, p in t.guessed.items()]
@@ -327,6 +343,10 @@ class Engine:
             t.guessed[uid] = pts
             g.scores[uid] = g.scores.get(uid, 0) + pts
             g.guesses[uid] = g.guesses.get(uid, 0) + 1
+            if g.mode == "speedrun":                    # the first correct guess wins the round
+                t.win_remaining = remaining
+                await self.io.delete(chat_id, message_id)
+                return await self._end_turn(g, "win")
             done = self._everyone_guessed(g)
             await self.io.delete(chat_id, message_id)
             await self._say(chat_id, g.lang, "guessed", name=esc(g.players[uid]), pts=pts)

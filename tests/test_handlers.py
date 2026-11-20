@@ -69,6 +69,26 @@ def test_start_in_private_and_group(env, h):
     assert "/newgame" in m.replies[0]
 
 
+class FakeQuery:
+    def __init__(self, data, user_id=1, name="Ada"):
+        self.data, self.from_user = data, NS(id=user_id, first_name=name)
+        self.answers: list[tuple] = []
+        self.message = NS(chat_id=CHAT, chat=NS(title="Club"), delete=self._delete)
+        self.deleted = False
+
+    async def answer(self, text=None, show_alert=False):
+        self.answers.append((text, show_alert))
+
+    async def _delete(self):
+        self.deleted = True
+
+
+def pick_mode(env, h, mode="speedrun", lang="it", user_id=1, name="Ada"):
+    q = FakeQuery(f"m:{mode}:{lang}:1", user_id, name)
+    run(env, h.cb_mode(NS(callback_query=q), ctx()))
+    return q
+
+
 def test_group_commands_refuse_private_chats(env, h):
     u, m = upd(kind="private", chat=5)
     run(env, h.newgame(u, ctx()))
@@ -78,6 +98,7 @@ def test_group_commands_refuse_private_chats(env, h):
 def test_newgame_language_argument_and_lobby_commands(env, h):
     u, _ = upd()
     run(env, h.newgame(u, ctx("en")))
+    pick_mode(env, h, lang="en")
     assert env.game.lang == "en"
     for uid in (2, 3):
         run(env, h.join(upd(uid, f"P{uid}")[0], ctx()))
@@ -91,6 +112,7 @@ def test_newgame_language_argument_and_lobby_commands(env, h):
 def test_newgame_uses_the_group_language_by_default(env, h):
     env.db.set_setting(CHAT, "lang", "en")
     run(env, h.newgame(upd()[0], ctx()))
+    pick_mode(env, h, lang="en")
     assert env.game.lang == "en"
 
 
@@ -190,3 +212,40 @@ def test_settings_menu_text(env, h):
     assert "Solo gli admin" in m2.replies[-1]
     text, _ = h._submenu(CHAT, "lang")
     assert "Lingua" in text
+
+
+def test_help_in_group_and_private(env, h):
+    u, m = upd()
+    run(env, h.help(u, ctx()))
+    assert "/addword" in m.replies[-1] and "/help" in m.replies[-1]
+
+
+def test_newgame_offers_the_three_modes_and_only_the_creator_picks(env, h):
+    u, m = upd()
+    run(env, h.newgame(u, ctx()))
+    assert env.game is None and "Speedrun" in m.replies[-1]
+    # somebody else presses a button: refused, nothing opens
+    q = pick_mode(env, h, user_id=2, name="Bob")
+    assert q.answers[-1][1] is True and env.game is None
+    # a mode that is not available yet
+    q = pick_mode(env, h, mode="classic")
+    assert env.game is None and q.answers[-1][1] is True
+    q = pick_mode(env, h, mode="speedrun")
+    assert env.game.mode == "speedrun" and q.deleted and env.game.creator == 1
+    assert "Speedrun" in env.io.texts()[-1]
+
+
+def test_newgame_refused_when_a_match_exists(env, h):
+    env.start_match(3)
+    u, m = upd()
+    run(env, h.newgame(u, ctx()))
+    assert "già una partita" in env.io.texts()[-1]
+
+
+def test_late_join_can_be_turned_off_in_the_settings(env, h):
+    env.start_match(3)
+    run(env, h.join(upd(7, "Late")[0], ctx()))
+    assert 7 in env.game.players and 7 in env.game.queue
+    env.db.set_setting(CHAT, "latejoin", "off")
+    run(env, h.join(upd(8, "Later")[0], ctx()))
+    assert 8 not in env.game.players and "non si può entrare" in env.io.texts()[-1]

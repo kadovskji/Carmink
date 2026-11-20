@@ -51,6 +51,12 @@ class Handlers:
         else:
             await self._reply(update, T(lang, "start_group"))
 
+    async def help(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        chat = update.effective_chat
+        if chat.type != "private":
+            self.db.track_chat(chat.id, chat.title)
+        await self._reply(update, T(self._lang(chat.id), "help"))
+
     async def newgame(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._group(update):
             return
@@ -58,7 +64,36 @@ class Handlers:
         lang = self.db.get_lang(chat.id)
         if ctx.args and ctx.args[0].lower() in LANGUAGES:      # /newgame en: this match only
             lang = ctx.args[0].lower()
-        await self.engine.new_game(chat.id, user.id, user.first_name, lang)
+        if not await self.engine.can_open(chat.id, user.id, lang):
+            return
+        rows = [[InlineKeyboardButton(T(lang, f"mode_{m}"), callback_data=f"m:{m}:{lang}:{user.id}")]
+                for m in config.MODES]
+        await self._reply(update, T(lang, "mode_pick", name=html.escape(user.first_name)),
+                          reply_markup=InlineKeyboardMarkup(rows))
+
+    async def cb_mode(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """The creator picked a mode: open the match."""
+        q = update.callback_query
+        chat_id = q.message.chat_id
+        try:
+            _, mode, lang, owner = q.data.split(":")
+            owner = int(owner)
+        except ValueError:
+            return await q.answer()
+        lang = lang if lang in LANGUAGES else self.db.get_lang(chat_id)
+        if q.from_user.id != owner:
+            return await q.answer(T(lang, "mode_only_creator"), show_alert=True)
+        if mode not in config.MODES:
+            return await q.answer()
+        if mode not in config.MODES_AVAILABLE:
+            return await q.answer(T(lang, "mode_soon"), show_alert=True)
+        await q.answer()
+        try:
+            await q.message.delete()
+        except TelegramError:
+            pass
+        self.db.track_chat(chat_id, getattr(q.message.chat, "title", None))
+        await self.engine.new_game(chat_id, owner, q.from_user.first_name, lang, mode)
 
     async def join(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if await self._group(update):

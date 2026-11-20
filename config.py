@@ -38,18 +38,24 @@ MIN_PLAYERS = 3             # needed to start a match
 FEW_PLAYERS = 5             # below this many players everybody draws twice (so: 5+ rounds)
 MIN_PLAYERS_TO_CONTINUE = 2  # a running match ends if fewer players are left
 
+# ---------------------------------------------------------------- game modes
+MODES = ("speedrun", "classic", "broken")
+MODES_AVAILABLE = ("speedrun",)     # the others are added in later releases
+DEFAULT_MODE = "speedrun"
+
 # ---------------------------------------------------------------- timings, in seconds
 LOBBY_SECONDS = 300         # sign-up window
 WAIT_MAX_MINUTES = 10       # max extension per /wait
 BREAK_SECONDS = 10          # pause between two turns (the next drawer is announced)
 CHOOSE_SECONDS = 10         # the drawer must pick one of the three words
 START_SECONDS = 20          # then must start drawing; otherwise the turn is skipped
-DRAW_SECONDS = 60           # drawing time, counted from the first stroke
+DRAW_SECONDS = 90           # drawing time, counted from the first stroke
 
 # ---------------------------------------------------------------- points
 GUESS_MAX = 100             # a guess at the very first second
 GUESS_MIN_SHARE = 0.4       # a guess in the very last second gets this share of GUESS_MAX
-DRAWER_PER_GUESS = 30       # drawer's points for every player who guessed
+DRAWER_PER_GUESS = 30       # classic mode: drawer's points for every player who guessed
+DRAWER_SPEEDRUN_MAX = 50    # speedrun: drawer's points when the word is guessed at the very first second
 DIFFICULTY_MULT = {1: 1.0, 2: 1.25, 3: 1.5}
 MAX_HINTS = 3
 HINT_PENALTY = 0.2          # every hint cuts 20% of the points (guessers' and drawer's)

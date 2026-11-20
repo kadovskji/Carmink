@@ -29,6 +29,7 @@ class Turn:
     photo_msg: int | None = None
     posted_ver: int = -1        # snapshot version shown in the chat
     posted_hints: int = 0
+    win_remaining: float | None = None     # speedrun: seconds left when the winning guess came
 
     def revealed(self) -> set[int]:
         return set(self.reveal_order[:self.hints])
@@ -41,6 +42,7 @@ class Game:
     creator: int
     players: dict[int, str]                     # user id -> display name (current players)
     lobby_end: float
+    mode: str = "speedrun"
     names: dict[int, str] = field(default_factory=dict)     # everybody who ever played here
     phase: Phase = Phase.LOBBY
     gen: int = 0                                # bumped at every phase change: stale timers die
@@ -88,6 +90,13 @@ def guess_points(remaining: float, diff: int, hints: int) -> int:
     share = max(0.0, min(1.0, remaining / config.DRAW_SECONDS))
     base = config.GUESS_MAX * (config.GUESS_MIN_SHARE + (1 - config.GUESS_MIN_SHARE) * share)
     return max(1, round(base * config.DIFFICULTY_MULT.get(diff, 1.0) * hint_factor(hints)))
+
+
+def speedrun_drawer_points(remaining: float, hints: int) -> int:
+    """Speedrun: the drawer earns up to DRAWER_SPEEDRUN_MAX, less the later the word is guessed."""
+    share = max(0.0, min(1.0, remaining / config.DRAW_SECONDS))
+    base = config.DRAWER_SPEEDRUN_MAX * (config.GUESS_MIN_SHARE + (1 - config.GUESS_MIN_SHARE) * share)
+    return max(1, round(base * hint_factor(hints)))
 
 
 def drawer_points(n_guessers: int, diff: int, hints: int) -> int:
