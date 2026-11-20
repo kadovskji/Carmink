@@ -1,0 +1,62 @@
+"""Environment settings and game constants (everything tunable lives here)."""
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def _int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+# ---------------------------------------------------------------- environment
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "carminkgame")
+MINIAPP_SHORTNAME = os.environ.get("MINIAPP_SHORTNAME", "app")   # the /newapp short name in BotFather
+WEB_HOST = os.environ.get("WEB_HOST", "127.0.0.1")               # nginx talks to this address
+WEB_PORT = _int("WEB_PORT", 8081)
+DB_FILE = os.environ.get("DB_FILE", "carmink.db")
+LOG_FILE = os.environ.get("LOG_FILE", "carmink.log")
+RESTART_FILE = os.environ.get("RESTART_FILE", "restart.flag")
+ADMIN_IDS = {int(x) for x in os.environ.get("ADMIN_ID", "").replace(" ", "").split(",")
+             if x.strip().isdigit()}
+# Commands that, in groups, are handled only when written as /command@CarminkBot
+REQUIRE_TAG = {c.strip().lstrip("/")
+               for c in os.environ.get("REQUIRE_TAG", "").split(",") if c.strip()}
+WEB_DIR = BASE_DIR / "web"
+DATA_DIR = BASE_DIR / "data"
+
+# ---------------------------------------------------------------- players and rounds
+MIN_PLAYERS = 3             # needed to start a match
+FEW_PLAYERS = 5             # below this many players everybody draws twice (so: 5+ rounds)
+MIN_PLAYERS_TO_CONTINUE = 2  # a running match ends if fewer players are left
+
+# ---------------------------------------------------------------- timings, in seconds
+LOBBY_SECONDS = 300         # sign-up window
+WAIT_MAX_MINUTES = 10       # max extension per /wait
+BREAK_SECONDS = 10          # pause between two turns (the next drawer is announced)
+CHOOSE_SECONDS = 10         # the drawer must pick one of the three words
+START_SECONDS = 20          # then must start drawing; otherwise the turn is skipped
+DRAW_SECONDS = 60           # drawing time, counted from the first stroke
+
+# ---------------------------------------------------------------- points
+GUESS_MAX = 100             # a guess at the very first second
+GUESS_MIN_SHARE = 0.4       # a guess in the very last second gets this share of GUESS_MAX
+DRAWER_PER_GUESS = 30       # drawer's points for every player who guessed
+DIFFICULTY_MULT = {1: 1.0, 2: 1.25, 3: 1.5}
+MAX_HINTS = 3
+HINT_PENALTY = 0.2          # every hint cuts 20% of the points (guessers' and drawer's)
+
+# ---------------------------------------------------------------- canvas pictures
+SNAPSHOT_FIRST_SECONDS = 2  # first picture in the chat, this long after the first stroke
+SNAPSHOT_EDIT_SECONDS = 5   # then the picture is refreshed at most this often
+SNAPSHOT_MAX_BYTES = 400_000
+SNAPSHOT_MIN_INTERVAL = 0.8  # the Mini App may not upload faster than this
+
+# ---------------------------------------------------------------- words
+CUSTOM_WORDS_MAX = 500      # per group
+WORD_MAX_LEN = 30
+CLOSE_NOTICES_PER_TURN = 2  # "you're close!" replies a player can get in one turn

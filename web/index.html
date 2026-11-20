@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Carmink</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <header id="bar">
+    <span id="info"></span>
+    <span id="clock"></span>
+  </header>
+
+  <main>
+    <section id="msg" class="center"></section>
+
+    <section id="choose" hidden>
+      <h2 id="choose-title"></h2>
+      <div id="choices"></div>
+    </section>
+
+    <section id="board" hidden>
+      <div id="word"></div>
+      <div id="stage">
+        <canvas id="cv" width="800" height="600"></canvas>
+        <img id="view" alt="" hidden>
+      </div>
+    </section>
+  </main>
+
+  <footer id="tools" hidden>
+    <div class="row" id="row-tools">
+      <button data-tool="pen" title="pen">✏️</button>
+      <button data-tool="eraser" title="eraser">🧽</button>
+      <button data-tool="fill" title="fill">🪣</button>
+      <button data-tool="circle-f" title="filled circle">⬤</button>
+      <button data-tool="circle-s" title="empty circle">◯</button>
+      <button data-tool="rect-f" title="filled rectangle">■</button>
+      <button data-tool="rect-s" title="empty rectangle">□</button>
+    </div>
+    <div class="row" id="row-colors"></div>
+    <div class="row" id="row-actions">
+      <button id="undo">↩️</button>
+      <button id="redo">↪️</button>
+      <span class="sizes" id="sizes"></span>
+      <button id="wipe">🗑</button>
+      <button id="hint">💡</button>
+      <button id="skip">⏭</button>
+    </div>
+  </footer>
+
+  <script src="fill.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
