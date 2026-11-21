@@ -34,6 +34,11 @@ STRINGS: dict[str, dict[str, str]] = {
               "A turno uno disegna la parola scelta tra tre (90 secondi dal primo tratto), gli altri indovinano "
               "(in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
               "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori (4 per Broken Canva, il telefono senza fili di frasi e disegni).\n\n"
+              "<b>Modalità</b> (le sceglie chi usa /newgame)\n"
+              "🔥 <b>Speedrun</b>: si indovina in chat, il primo che indovina vince il round.\n"
+              "🕹️ <b>Classica</b>: si indovina nella Mini App e tutti continuano a provare.\n"
+              "☎️ <b>Broken Canva</b>: telefono senza fili; ognuno scrive in privato una frase, poi frasi e disegni passano di mano in mano. "
+              "Nessun vincitore, alla fine arrivano le GIF. Servono 4 giocatori che abbiano avviato il bot in privato.\n\n"
               "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
               "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
               "<b>Altro</b>\n/stats · /mystats · /settings · /help",
@@ -41,6 +46,11 @@ STRINGS: dict[str, dict[str, str]] = {
               "Players take turns drawing a word picked among three (90 seconds from the first stroke) while the others "
               "guess in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess, and can give hints at the cost of some points. At least 3 players are needed (4 for Broken Canva, the telephone game of phrases and drawings).\n\n"
+              "<b>Modes</b> (picked by whoever uses /newgame)\n"
+              "🔥 <b>Speedrun</b>: guess in the chat, the first to guess wins the round.\n"
+              "🕹️ <b>Classic</b>: guess in the Mini App, everybody keeps trying.\n"
+              "☎️ <b>Broken Canva</b>: telephone game; everybody privately writes a phrase, then phrases and drawings are passed around. "
+              "Nobody wins, GIFs come at the end. Needs 4 players who have started the bot in private.\n\n"
               "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
               "<b>Group dictionary</b>\n/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt;\n"
               "<b>Other</b>\n/stats · /mystats · /settings · /help",
