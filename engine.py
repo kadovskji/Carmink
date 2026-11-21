@@ -12,6 +12,7 @@ import random
 from typing import Awaitable, Callable, Protocol
 
 import config
+import strokes
 import words
 from db import Database
 from game import (Game, Phase, Turn, drawer_points, guess_points, laps, ranking,
@@ -255,7 +256,8 @@ class Engine:
         self._timer(g, "break", config.BREAK_SECONDS, self._open_choice)
         text = header + T(g.lang, "next_drawer", name=esc(g.players[drawer]), n=g.turn_no,
                           total=g.total_turns, secs=config.BREAK_SECONDS)
-        await self.io.send(g.chat_id, text, [(T(g.lang, "btn_open"), self.link(g.chat_id))])
+        label = "btn_play" if g.mode == "classic" else "btn_open"
+        await self.io.send(g.chat_id, text, [(T(g.lang, label), self.link(g.chat_id))])
 
     async def _open_choice(self, g: Game) -> None:
         if g.turn.drawer not in g.players:
@@ -327,6 +329,17 @@ class Engine:
         await self.io.send(g.chat_id, text)
 
     # ================================================================ guesses (group chat)
+    def _award(self, g: Game, uid: int) -> int:
+        """Score a correct guess (any channel) and return the points."""
+        t = g.turn
+        remaining = t.started_at + config.DRAW_SECONDS - self.io.now()
+        pts = guess_points(remaining, t.word.diff, t.hints)
+        t.guessed[uid] = pts
+        g.scores[uid] = g.scores.get(uid, 0) + pts
+        g.guesses[uid] = g.guesses.get(uid, 0) + 1
+        t.win_remaining = remaining
+        return pts
+
     async def on_message(self, chat_id: int, uid: int, text: str, message_id: int) -> None:
         g = self.games.get(chat_id)
         if not g or g.phase != Phase.DRAWING or uid not in g.players:
@@ -337,14 +350,16 @@ class Engine:
             if words.contains_answer(word, text):       # don't let the answer leak
                 await self.io.delete(chat_id, message_id)
             return
+        if g.mode == "classic":                         # guesses are typed in the Mini App
+            if words.is_correct(word, text) or words.contains_answer(word, text):
+                await self.io.delete(chat_id, message_id)
+                if uid not in t.chat_warned:
+                    t.chat_warned.add(uid)
+                    await self._say(chat_id, g.lang, "classic_chat_notice", name=esc(g.players[uid]))
+            return
         if words.is_correct(word, text):
-            remaining = t.started_at + config.DRAW_SECONDS - self.io.now()
-            pts = guess_points(remaining, word.diff, t.hints)
-            t.guessed[uid] = pts
-            g.scores[uid] = g.scores.get(uid, 0) + pts
-            g.guesses[uid] = g.guesses.get(uid, 0) + 1
+            pts = self._award(g, uid)
             if g.mode == "speedrun":                    # the first correct guess wins the round
-                t.win_remaining = remaining
                 await self.io.delete(chat_id, message_id)
                 return await self._end_turn(g, "win")
             done = self._everyone_guessed(g)
@@ -356,6 +371,72 @@ class Engine:
                 t.close_notices.get(uid, 0) < config.CLOSE_NOTICES_PER_TURN:
             t.close_notices[uid] = t.close_notices.get(uid, 0) + 1
             await self.io.send(chat_id, T(g.lang, "close"), reply_to=message_id)
+
+    # ================================================================ classic mode: guesses and live drawing
+    async def web_guess(self, chat_id: int, uid: int, text: str) -> dict:
+        """A guess typed in the Mini App (classic mode)."""
+        g = self.games.get(chat_id)
+        if not g or not g.turn:
+            raise GameError("no_game")
+        if g.mode != "classic":
+            raise GameError("wrong_mode")
+        t = g.turn
+        if g.phase != Phase.DRAWING:
+            raise GameError("wrong_phase")
+        if uid not in g.players:
+            raise GameError("not_player")
+        if uid == t.drawer:
+            raise GameError("is_drawer")
+        if uid in t.guessed:
+            raise GameError("already_guessed")
+        text = " ".join(str(text).split())[:config.ATTEMPT_MAX_LEN]
+        if not text:
+            raise GameError("bad_request")
+        now = self.io.now()
+        if now - t.last_attempt.get(uid, -1e9) < config.GUESS_MIN_INTERVAL:
+            raise GameError("too_fast")
+        t.last_attempt[uid] = now
+        attempt_id = len(t.attempts)
+        name = g.players[uid]
+        if words.is_correct(t.word, text):
+            pts = self._award(g, uid)
+            t.attempts.append({"u": name, "t": None, "r": True})     # the word itself is never shown
+            done = self._everyone_guessed(g)
+            await self._say(chat_id, g.lang, "guessed", name=esc(name), pts=pts)
+            if done and g.phase == Phase.DRAWING:
+                await self._end_turn(g, "all")
+            return {"result": "right", "pts": pts, "id": attempt_id}
+        shown = "🙈" if words.contains_answer(t.word, text) else text    # a sentence with the answer in it
+        t.attempts.append({"u": name, "t": shown, "r": False})
+        return {"result": "close" if words.is_close(t.word, text) else "wrong", "id": attempt_id}
+
+    def post_events(self, chat_id: int, uid: int, frm, events) -> int:
+        """The drawer streams its strokes; `frm` is the index of the first event of the batch,
+        so a batch sent twice is stored once."""
+        g, t = self._turn_of(chat_id, uid, Phase.STARTING, Phase.DRAWING)
+        try:
+            clean = strokes.clean_events(events)
+        except ValueError:
+            raise GameError("bad_request")
+        if isinstance(frm, bool) or not isinstance(frm, int) or not 0 <= frm <= len(t.events):
+            raise GameError("gap")
+        new = clean[len(t.events) - frm:]
+        if len(t.events) + len(new) > config.EVENTS_MAX:
+            raise GameError("too_many")
+        t.events.extend(new)
+        return len(t.events)
+
+    def live(self, chat_id: int, turn, since, att, with_events: bool = True) -> dict:
+        """New drawing events and guesses since the client's cursors (it restarts from 0 on a new turn)."""
+        g = self.games.get(chat_id)
+        if not g or not g.turn:
+            return {"turn": None}
+        t = g.turn
+        same = turn == g.turn_no
+        ev = since if same and isinstance(since, int) and 0 <= since <= len(t.events) else 0
+        at = att if same and isinstance(att, int) and 0 <= att <= len(t.attempts) else 0
+        return {"turn": g.turn_no, "ev": ev, "events": t.events[ev:ev + 4000] if with_events else [],
+                "att": at, "attempts": t.attempts[at:]}
 
     # ================================================================ Mini App requests
     def _turn_of(self, chat_id: int, uid: int, *phases: Phase) -> tuple[Game, Turn]:
@@ -373,6 +454,7 @@ class Engine:
         if not g:
             return {"phase": "none", "lang": self.db.get_lang(chat_id)}
         out: dict = {"phase": g.phase.name.lower(), "lang": g.lang, "snap": g.snap_ver,
+                     "mode": g.mode,
                      "scores": [[n, p] for _, _, n, p in ranking(g.scores, g.players)],
                      "players": list(g.players.values()), "role": "viewer",
                      "in_game": uid in g.players}
@@ -388,6 +470,8 @@ class Engine:
             out["hints_max"] = words.max_hints(t.word.word)
             if t.hints:
                 out["mask"] = words.make_mask(t.word.word, t.revealed())
+        if uid in t.guessed:
+            out["me_guessed"] = t.guessed[uid]
         if t.drawer == uid:
             out["role"] = "drawer"
             if g.phase == Phase.CHOOSING:
@@ -418,11 +502,14 @@ class Engine:
         g.go(Phase.DRAWING, config.DRAW_SECONDS, t.started_at)
         self._timer(g, "end", config.DRAW_SECONDS, self._time_up)
         self._timer(g, "snap", config.SNAPSHOT_FIRST_SECONDS, self._snap_tick)
+        classic = g.mode == "classic"
         await self.io.send(
             g.chat_id,
-            T(g.lang, "drawing_started", name=esc(g.players[uid]), secs=config.DRAW_SECONDS,
+            T(g.lang, "drawing_started_classic" if classic else "drawing_started",
+              name=esc(g.players[uid]), secs=config.DRAW_SECONDS,
               icon=words.CATEGORY_ICON.get(t.word.cat, "")),
-            [(T(g.lang, "btn_watch"), self.link(g.chat_id, compact=True))])
+            [(T(g.lang, "btn_play" if classic else "btn_watch"),
+              self.link(g.chat_id, compact=not classic))])
 
     def snapshot(self, chat_id: int, uid: int, data: bytes) -> None:
         g, _ = self._turn_of(chat_id, uid, Phase.DRAWING)

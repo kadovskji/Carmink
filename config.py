@@ -40,7 +40,7 @@ MIN_PLAYERS_TO_CONTINUE = 2  # a running match ends if fewer players are left
 
 # ---------------------------------------------------------------- game modes
 MODES = ("speedrun", "classic", "broken")
-MODES_AVAILABLE = ("speedrun",)     # the others are added in later releases
+MODES_AVAILABLE = ("speedrun", "classic")   # Broken Canva is added in a later release
 DEFAULT_MODE = "speedrun"
 
 # ---------------------------------------------------------------- timings, in seconds
@@ -65,6 +65,14 @@ SNAPSHOT_FIRST_SECONDS = 2  # first picture in the chat, this long after the fir
 SNAPSHOT_EDIT_SECONDS = 5   # then the picture is refreshed at most this often
 SNAPSHOT_MAX_BYTES = 400_000
 SNAPSHOT_MIN_INTERVAL = 0.8  # the Mini App may not upload faster than this
+
+# ---------------------------------------------------------------- live drawing and Mini App guesses
+EVENTS_MAX = 30000          # drawing events kept per turn
+EVENTS_PER_POST = 400
+STROKE_POINTS_MAX = 2000
+POST_MAX_BYTES = 200_000
+GUESS_MIN_INTERVAL = 1.0    # seconds between two attempts of the same player
+ATTEMPT_MAX_LEN = 60
 
 # ---------------------------------------------------------------- words
 CUSTOM_ALTS_MAX = 5            # synonyms accepted per custom word

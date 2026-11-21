@@ -68,7 +68,8 @@ def test_requests_need_valid_credentials(client):
 def test_static_files_and_cache_headers(client):
     r = client.get("/")
     assert r.status_code == 200 and "Carmink" in r.text and r.headers["cache-control"] == "no-cache"
-    assert client.get("/app.js").status_code == 200 and client.get("/fill.js").status_code == 200
+    for name in ("app.js", "fill.js", "board.js", "style.css"):
+        assert client.get("/" + name).status_code == 200
     assert client.get("/api/state", headers=hdr()).headers["cache-control"] == "no-store"
 
 
@@ -118,13 +119,40 @@ def test_oversized_snapshot_is_refused(env, client):
     assert client.post("/api/snapshot", content=big, headers=hdr(user_id=t.drawer)).status_code == 413
 
 
-def test_node_flood_fill_tests_pass():
+@pytest.mark.parametrize("name", ["fill.test.js", "board.test.js"])
+def test_node_tests_pass(name):
     import shutil
     import subprocess
     from pathlib import Path
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js not installed")
-    script = Path(__file__).with_name("fill.test.js")
+    script = Path(__file__).with_name(name)
     res = subprocess.run([node, str(script)], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
+
+
+def test_classic_guesses_and_live_events_over_http(env, client):
+    g = env.start_match(3)                                  # classic
+    t = env.to_drawing()
+    d = t.drawer
+    a = next(u for u in g.players if u != d)
+    ev = [{"e": "begin", "op": {"k": "s", "c": "#000000", "w": 7, "p": [[5, 5]]}}, {"e": "end"}]
+    assert client.post("/api/events", json={"from": 0, "events": ev}, headers=hdr(user_id=d)).json() == {"ok": True, "n": 2}
+    assert client.post("/api/events", json={"from": 0, "events": ev}, headers=hdr(user_id=a)).status_code == 409
+    assert client.post("/api/events", json={"events": ev}, headers=hdr(user_id=d)).status_code == 400
+    assert client.post("/api/events", json={"from": 7, "events": ev}, headers=hdr(user_id=d)).json() == {"error": "gap"}
+
+    r = client.get(f"/api/live?turn={g.turn_no}&since=0&att=0", headers=hdr(user_id=a)).json()
+    assert r["turn"] == g.turn_no and len(r["events"]) == 2 and r["attempts"] == []
+    assert client.get("/api/live?turn=zzz", headers=hdr(user_id=a)).json()["ev"] == 0
+
+    assert client.post("/api/guess", json={"text": "boh"}, headers=hdr(user_id=a, name="Bea")).json()["result"] == "wrong"
+    assert client.post("/api/guess", json={}, headers=hdr(user_id=a)).status_code == 400
+    assert client.post("/api/guess", json={"text": "x"}, headers=hdr(user_id=d)).json() == {"error": "is_drawer"}
+    r = client.post("/api/guess", json={"text": t.word.word}, headers=hdr(user_id=a))
+    assert r.json()["result"] == "right"
+    s = client.get("/api/state", headers=hdr(user_id=a)).json()
+    assert s["mode"] == "classic" and s["me_guessed"] > 0 and "word" not in s
+    live = client.get(f"/api/live?turn={g.turn_no}&since=2&att=0", headers=hdr(user_id=d)).json()
+    assert live["events"] == [] and [x["r"] for x in live["attempts"]] == [False, True]

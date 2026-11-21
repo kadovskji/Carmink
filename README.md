@@ -15,7 +15,7 @@ A Telegram party game bot where players take turns drawing a word while everybod
 | Start | 20 s | The drawer must start drawing, otherwise the turn is skipped |
 | Drawing | 90 s | The clock starts at the first stroke. The others guess by writing in the chat |
 
-4. A correct guess is deleted from the chat (so it doesn't spoil the word). In **Speedrun** the first player who guesses wins the round and it ends at once.
+4. A correct guess is deleted from the chat (so it doesn't spoil the word). In **Speedrun** the first player who guesses wins the round and it ends at once. In **Classic** guesses are typed in the Mini App; a message with the answer written in the chat is deleted and doesn't count. The round ends when everybody has guessed or time is up.
 5. When all the turns are done the final scoreboard is shown.
 
 ### Game modes
@@ -23,7 +23,7 @@ A Telegram party game bot where players take turns drawing a word while everybod
 | Mode | Status | How it plays |
 |---|---|---|
 | 🔥 Speedrun | available | Guesses are typed in the chat. The first correct guess wins the round |
-| 🕹️ Classic | coming soon | Guesses are typed in the Mini App and everybody keeps trying after somebody got it |
+| 🕹️ Classic | available | Guesses are typed in the Mini App (everybody sees everybody's attempts live) and the others keep trying after somebody got it |
 | ☎️ Broken Canva | coming soon | Telephone game of phrases and drawings, nobody wins; the bot builds a GIF of every chain |
 
 ### Points
@@ -46,10 +46,6 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 | `/help` | How to play and the list of commands (private chat and groups) |
 | `/newgame [it\|en]` | Open a match and pick the mode; the language is the group's, unless given |
 | `/join` | Join a match, also while it is running (you guess at once and draw at the end), unless the group turned it off in `/settings` |
-| `/start` | Welcome message (in private chat) |
-| `/help` | How to play and the list of commands (private chat and groups) |
-| `/newgame [it\|en]` | Open a match; the language is the group's, unless given |
-| `/join` | Join a match, also while it is running (you guess at once and draw at the end) |
 | `/ready` | Start now (any player, with at least 3 players) |
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed) |
 | `/quit` | Leave the match |
@@ -65,7 +61,7 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 
 Pen, eraser, fill, filled and empty circle, filled and empty rectangle, 16 colours, 4 brush sizes, undo / redo, wipe, **Hint** (shows the word as `_ a _ _ o` and reveals one more random letter each time, up to 3 times, always leaving at least half of the letters hidden) and **Skip** (gives up the turn).
 
-The drawer opens it with the button under the "next drawer" message. Everybody else gets a **Watch live** button on the same canvas, opened in compact mode so the chat stays visible. While the Mini App is closed, the group chat shows one photo that the bot refreshes in place every few seconds, so the chat is not flooded.
+The drawer opens it with the button under the "next drawer" message. The drawer's strokes are streamed to the server as small events (`web/board.js`, `strokes.py`) and replayed by everybody else, so the canvas is live for all the viewers. In Speedrun everybody else gets a **Watch live** button, opened in compact mode so the chat stays visible; in Classic the button opens the full app, where players type their guesses under the canvas, see everybody's attempts (a correct one is shown without the word) and get a private "so close!" for near misses (one attempt per second at most). While the Mini App is closed, the group chat shows one photo that the bot refreshes in place every few seconds, so the chat is not flooded.
 
 ## How it is built
 

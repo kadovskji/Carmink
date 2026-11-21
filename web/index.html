@@ -25,8 +25,14 @@
       <div id="word"></div>
       <div id="stage">
         <canvas id="cv" width="800" height="600"></canvas>
-        <img id="view" alt="" hidden>
       </div>
+      <div id="attempts" hidden></div>
+      <form id="guessbar" hidden autocomplete="off">
+        <input id="guess" type="text" maxlength="60" enterkeyhint="send" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+        <button id="send" type="submit"></button>
+      </form>
+      <div id="flash"></div>
+      <div id="mine" hidden></div>
     </section>
   </main>
 
@@ -52,6 +58,7 @@
   </footer>
 
   <script src="fill.js"></script>
+  <script src="board.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

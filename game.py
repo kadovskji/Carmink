@@ -30,6 +30,10 @@ class Turn:
     posted_ver: int = -1        # snapshot version shown in the chat
     posted_hints: int = 0
     win_remaining: float | None = None     # speedrun: seconds left when the winning guess came
+    events: list[dict] = field(default_factory=list)      # live drawing events (see strokes.py)
+    attempts: list[dict] = field(default_factory=list)    # classic: guesses typed in the Mini App
+    last_attempt: dict[int, float] = field(default_factory=dict)
+    chat_warned: set[int] = field(default_factory=set)
 
     def revealed(self) -> set[int]:
         return set(self.reveal_order[:self.hints])

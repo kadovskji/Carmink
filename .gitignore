@@ -1,0 +1,10 @@
+.env
+*.db
+*.log
+*.log.*
+restart.flag
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+.idea/

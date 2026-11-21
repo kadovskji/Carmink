@@ -6,7 +6,7 @@ import pytest
 
 import config
 from db import Database
-from engine import Engine
+from engine import Engine, GameError
 
 
 class FakeIO:
@@ -107,12 +107,25 @@ class Env:
         self.run(self.engine.start_drawing(self.CHAT, t.drawer))
         return self.game.turn
 
-    def guess(self, uid: int, text: str, mid: int = 5000):
+    def chat(self, uid: int, text: str, mid: int = 5000):
+        """A message written in the group chat."""
         self.run(self.engine.on_message(self.CHAT, uid, text, mid))
+
+    def guess(self, uid: int, text: str, mid: int = 5000):
+        """A guess: typed in the Mini App in classic mode, in the chat otherwise.
+        Returns the Mini App result, or the error code."""
+        g = self.game
+        if g is not None and g.mode == "classic":
+            try:
+                return self.run(self.engine.web_guess(self.CHAT, uid, text))
+            except GameError as e:
+                return e.code
+        self.chat(uid, text, mid)
 
 
 @pytest.fixture
-def env():
+def env(monkeypatch):
+    monkeypatch.setattr(config, "GUESS_MIN_INTERVAL", 0.0)    # tests guess several times at the same instant
     e = Env()
     yield e
     e.loop.close()

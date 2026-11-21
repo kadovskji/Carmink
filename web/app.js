@@ -31,6 +31,11 @@
       skipConfirm: "Saltare il tuo turno?",
       wipeConfirm: "Cancellare tutta la tela?",
       round: "Round {n}/{total}",
+      guessPh: "Scrivi la tua risposta…",
+      send: "Invia",
+      youGuessed: "✅ Hai indovinato! +{p} punti",
+      close: "🔥 Ci sei vicino!",
+      rightAtt: "✅ {name} ha indovinato!",
     },
     en: {
       none: "No match running in this group.",
@@ -50,6 +55,11 @@
       skipConfirm: "Skip your turn?",
       wipeConfirm: "Wipe the whole canvas?",
       round: "Round {n}/{total}",
+      guessPh: "Type your answer…",
+      send: "Send",
+      youGuessed: "✅ You got it! +{p} points",
+      close: "🔥 So close!",
+      rightAtt: "✅ {name} got it!",
     },
   };
   let lang = "it";
@@ -67,8 +77,6 @@
   let endsAt = 0;
   let turnKey = null;
   let startSent = false;
-  let lastSnap = -1;
-  let viewUrl = null;
   let msgFn = null;
   let choicesKey = "";
 
@@ -98,19 +106,26 @@
     endsAt = st.ends_in != null ? performance.now() + st.ends_in * 1000 : 0;
     const key = st.turn != null ? String(st.turn) : null;
     if (key !== turnKey) {
-      turnKey = key; resetCanvas(); startSent = false; lastSnap = -1;
-      $("view").removeAttribute("src");
+      turnKey = key; resetCanvas(); startSent = false; resetLive(); clearAttempts();
     }
 
     const phase = st.phase, drawer = st.role === "drawer";
     const canvasOn = drawer && (phase === "starting" || phase === "drawing");
     const viewOn = !drawer && phase === "drawing";
+    const attOn = st.mode === "classic" && phase === "drawing" && (canvasOn || viewOn);
+    const guessOn = attOn && !drawer && st.in_game;
     show("choose", drawer && phase === "choosing");
     show("board", canvasOn || viewOn);
     show("tools", canvasOn);
+    show("attempts", attOn);
+    show("guessbar", guessOn && st.me_guessed == null);
+    show("mine", guessOn && st.me_guessed != null);
+    if (guessOn && st.me_guessed != null) $("mine").textContent = t("youGuessed", { p: st.me_guessed });
+    $("guess").placeholder = t("guessPh");
+    $("send").textContent = t("send");
     document.body.classList.toggle("has-tools", canvasOn);
-    show("cv", drawer);
-    show("view", !drawer);
+    document.body.classList.toggle("has-att", attOn && drawer);
+    document.body.classList.toggle("has-guess", guessOn);
     show("msg", !(canvasOn || viewOn || (drawer && phase === "choosing")));
     $("info").textContent = st.turn ? t("round", { n: st.turn, total: st.turns }) : "Carmink";
 
@@ -126,7 +141,6 @@
 
     if (drawer && phase === "choosing") renderChoices();
     if (canvasOn || viewOn) renderBoard(drawer, phase);
-    if (viewOn && st.snap !== lastSnap) { lastSnap = st.snap; loadSnapshot(); }
     tick();
   }
 
@@ -161,17 +175,6 @@
     }
   }
 
-  async function loadSnapshot() {
-    try {
-      const res = await api("snapshot.jpg");
-      if (res.status !== 200) return;
-      const url = URL.createObjectURL(await res.blob());
-      $("view").src = url;
-      if (viewUrl) URL.revokeObjectURL(viewUrl);
-      viewUrl = url;
-    } catch (e) { /* next poll retries */ }
-  }
-
   function tick() {
     $("clock").textContent = endsAt ? String(secs()) : "";
     if (msgFn) $("msg").textContent = msgFn();
@@ -185,14 +188,16 @@
   const W = 800, H = 600;
   const cv = $("cv");
   const ctx = cv.getContext("2d", { willReadFrequently: true });
+  const board = new window.Board();         // the shared drawing model (board.js)
   const COLORS = ["#000000", "#7f7f7f", "#c3c3c3", "#ffffff", "#880015", "#ed1c24", "#ff7f27", "#fff200",
     "#22b14c", "#b5e61d", "#00a2e8", "#3f48cc", "#a349a4", "#ffaec9", "#b97a57", "#ffc90e"];
   const SIZES = [3, 7, 14, 26];
-  let ops = [], redoStack = [], cur = null;
   let tool = "pen", color = "#000000", size = 7;
   let dirty = false;
 
   const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const r1 = (v) => Math.round(v * 10) / 10;
 
   function white() { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H); }
 
@@ -218,26 +223,88 @@
     }
   }
 
-  function redraw(preview) {
-    white();
-    for (const op of ops) { if (op.k === "x") white(); else drawOp(op); }
-    if (preview) drawOp(preview);
+  function drawSeg(op, from) {
+    ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = op.c; ctx.lineWidth = op.w;
+    ctx.beginPath(); ctx.moveTo(op.p[from][0], op.p[from][1]);
+    for (let i = from + 1; i < op.p.length; i++) ctx.lineTo(op.p[i][0], op.p[i][1]);
+    ctx.stroke();
   }
 
-  function resetCanvas() { ops = []; redoStack = []; cur = null; dirty = false; white(); updateUndo(); }
+  function redraw() {
+    white();
+    for (const op of board.ops) { if (op.k === "x") white(); else drawOp(op); }
+    if (board.cur) drawOp(board.cur);
+  }
+
+  /* Apply events to the model and paint them: strokes incrementally, anything that changes the
+     past (undo, shapes, wipe) with one full redraw at the end of the batch. Returns what apply() said. */
+  function applyBatch(events) {
+    let full = false, preview = false;
+    const out = [];
+    for (const ev of events) {
+      let r = null;
+      try { r = board.apply(ev); } catch (e) { r = null; }
+      out.push(r);
+      if (!r) continue;
+      switch (r.r) {
+        case "redraw": full = true; break;
+        case "op": if (!full) { if (r.op.k === "x") white(); else drawOp(r.op); } break;
+        case "begin": if (board.cur.k === "s") { if (!full) drawOp(board.cur); } else preview = true; break;
+        case "seg": if (!full) drawSeg(board.cur, r.from); break;
+        case "preview": preview = true; break;
+        case "end": if (r.op.k === "sh") full = true; preview = false; break;
+      }
+    }
+    if (full || preview) redraw();
+    return out;
+  }
+
+  function resetCanvas() { board.reset(); dirty = false; white(); updateUndo(); }
 
   function point(e) {
     const r = cv.getBoundingClientRect();
-    return [Math.max(0, Math.min(W, (e.clientX - r.left) * W / r.width)),
-            Math.max(0, Math.min(H, (e.clientY - r.top) * H / r.height))];
+    return [r1(Math.max(0, Math.min(W, (e.clientX - r.left) * W / r.width))),
+            r1(Math.max(0, Math.min(H, (e.clientY - r.top) * H / r.height)))];
   }
 
   function canDraw() { return st.role === "drawer" && (st.phase === "starting" || st.phase === "drawing"); }
 
-  function commit(op) { ops.push(op); redoStack = []; dirty = true; updateUndo(); queueUpload(); }
+  // ---- the drawer streams its events to the server, which hands them to everybody else
+  let evSent = 0, evQueue = [], inflight = null;
+  function emit(ev) {
+    const last = evQueue[evQueue.length - 1];
+    if (last && ev.e === "pt" && last.e === "pt") last.p = last.p.concat(clone(ev.p));
+    else if (last && ev.e === "sh" && last.e === "sh") last.b = ev.b.slice();
+    else evQueue.push(clone(ev));
+  }
+  async function flushEvents() {
+    if (!canDraw()) return;
+    if (!inflight) {
+      if (!evQueue.length) return;
+      inflight = { from: evSent, events: evQueue.splice(0, 400) };
+    }
+    try {
+      const res = await api("events", "POST", inflight);
+      if (res.ok) { evSent = inflight.from + inflight.events.length; inflight = null; }
+      else {
+        const j = await res.json().catch(() => ({}));
+        if (["gap", "bad_request", "too_many"].includes(j.error)) inflight = null;   // can't be fixed by retrying
+      }
+    } catch (e) { /* offline for a moment: the same batch is sent again */ }
+  }
+  setInterval(flushEvents, 150);
+
+  /* A change made by the drawer: model + canvas + stream. */
+  function local(ev, upload) {
+    const res = applyBatch([ev]);
+    if (!res[0]) return false;
+    emit(ev); dirty = true; updateUndo();
+    if (upload) queueUpload();
+    return true;
+  }
 
   cv.addEventListener("pointerdown", (e) => {
-    if (!canDraw()) return;
+    if (!canDraw() || board.cur) return;
     e.preventDefault();
     try { cv.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or lost pointer */ }
     if (!startSent && st.phase === "starting") {
@@ -245,53 +312,43 @@
       api("start", "POST").then((r) => { if (!r.ok) startSent = false; }).catch(() => { startSent = false; });
     }
     const p = point(e);
-    if (tool === "fill") { commit({ k: "f", c: color, x: Math.floor(p[0]), y: Math.floor(p[1]) }); redraw(); return; }
+    if (tool === "fill") { local({ e: "op", op: { k: "f", c: color, x: Math.floor(p[0]), y: Math.floor(p[1]) } }, true); return; }
     if (tool === "pen" || tool === "eraser") {
-      cur = { k: "s", c: tool === "eraser" ? "#ffffff" : color, w: tool === "eraser" ? size * 2 : size, p: [p] };
-      drawOp(cur);
+      local({ e: "begin", op: { k: "s", c: tool === "eraser" ? "#ffffff" : color, w: tool === "eraser" ? size * 2 : size, p: [p] } });
     } else {
       const [shape, mode] = tool.split("-");
-      cur = { k: "sh", t: shape, f: mode === "f", c: color, w: size, a: p, b: p };
+      local({ e: "begin", op: { k: "sh", t: shape === "circle" ? "circle" : "rect", f: mode === "f", c: color, w: size, a: p, b: p } });
     }
   });
 
   cv.addEventListener("pointermove", (e) => {
-    if (!cur) return;
+    if (!board.cur) return;
     e.preventDefault();
     let events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     if (!events.length) events = [e];     // not supported, or synthetic event
-    for (const ev of events) {
-      const p = point(ev);
-      if (cur.k === "s") {
-        const last = cur.p[cur.p.length - 1];
-        cur.p.push(p);
-        ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = cur.c; ctx.lineWidth = cur.w;
-        ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
-      } else { cur.b = p; }
-    }
-    if (cur.k === "sh") redraw(cur);
+    const pts = events.map(point);
+    if (board.cur.k === "s") local({ e: "pt", p: pts });
+    else local({ e: "sh", b: pts[pts.length - 1] });
   });
 
-  function endStroke() {
-    if (!cur) return;
-    const op = cur; cur = null;
-    commit(op);
-    if (op.k === "sh") redraw();
+  function endStroke(e) {
+    if (!board.cur) return;
+    local(board.cur.k === "sh" ? { e: "end", b: point(e) } : { e: "end" }, true);
   }
   cv.addEventListener("pointerup", endStroke);
   cv.addEventListener("pointercancel", endStroke);
 
   // ------------------------------------------------------------------ buttons
-  function updateUndo() { $("undo").disabled = !ops.length; $("redo").disabled = !redoStack.length; }
+  function updateUndo() { $("undo").disabled = !board.ops.length; $("redo").disabled = !board.undone.length; }
 
-  $("undo").addEventListener("click", () => { if (ops.length) { redoStack.push(ops.pop()); redraw(); dirty = true; updateUndo(); queueUpload(); } });
-  $("redo").addEventListener("click", () => { if (redoStack.length) { ops.push(redoStack.pop()); redraw(); dirty = true; updateUndo(); queueUpload(); } });
+  $("undo").addEventListener("click", () => { if (canDraw()) local({ e: "undo" }, true); });
+  $("redo").addEventListener("click", () => { if (canDraw()) local({ e: "redo" }, true); });
 
   const confirmBox = (text, yes) => {
     if (tg && tg.showConfirm) tg.showConfirm(text, (ok) => ok && yes());
     else if (window.confirm(text)) yes();
   };
-  $("wipe").addEventListener("click", () => confirmBox(t("wipeConfirm"), () => { commit({ k: "x" }); redraw(); }));
+  $("wipe").addEventListener("click", () => confirmBox(t("wipeConfirm"), () => { if (canDraw()) local({ e: "op", op: { k: "x" } }, true); }));
   $("skip").addEventListener("click", () => confirmBox(t("skipConfirm"), async () => { await api("skip", "POST"); refresh(); }));
   $("hint").addEventListener("click", async () => { $("hint").disabled = true; await api("hint", "POST"); refresh(); });
 
@@ -318,7 +375,80 @@
   document.querySelector(`.swatch[data-c="${color}"]`).classList.add("on");
   document.querySelector(`.dot[data-s="${size}"]`).classList.add("on");
 
-  // ------------------------------------------------------------------ pictures for the chat and the viewers
+  // ------------------------------------------------------------------ live view and guesses
+  let vTurn = null, vSince = 0, vAtt = 0;
+  const myClose = new Set();
+  function resetLive() {
+    vTurn = null; vSince = 0; vAtt = 0;
+    evSent = 0; evQueue = []; inflight = null; myClose.clear();
+  }
+
+  function clearAttempts() { $("attempts").textContent = ""; }
+  function addAttempt(i, a) {
+    const list = $("attempts");
+    const stick = list.scrollTop + list.clientHeight >= list.scrollHeight - 12;
+    const d = document.createElement("div");
+    d.className = "att" + (a.r ? " right" : "");
+    if (a.r) d.textContent = t("rightAtt", { name: a.u });
+    else {
+      const b = document.createElement("b");
+      b.textContent = a.u + ": ";
+      d.append(b, document.createTextNode(String(a.t) + (myClose.has(i) ? " 🔥" : "")));
+    }
+    list.append(d);
+    while (list.childElementCount > 80) list.firstChild.remove();
+    if (stick) list.scrollTop = list.scrollHeight;
+  }
+
+  const liveActive = () => !st.unauth && (st.phase === "drawing" || st.phase === "starting") &&
+    (st.role !== "drawer" || st.mode === "classic");
+
+  async function pollLive() {
+    try {
+      if (liveActive()) {
+        const drawer = st.role === "drawer";
+        const res = await api(`live?turn=${vTurn == null ? -1 : vTurn}&since=${vSince}&att=${vAtt}` + (drawer ? "&ev=0" : ""));
+        if (res.ok) {
+          const j = await res.json();
+          if (j.turn != null && j.turn === st.turn) {         // ignore answers about a turn that is over
+            if (j.turn !== vTurn) { vTurn = j.turn; if (!drawer) resetCanvas(); clearAttempts(); }
+            if (!drawer && j.events.length) applyBatch(j.events);
+            vSince = j.ev + j.events.length;
+            j.attempts.forEach((a, k) => addAttempt(j.att + k, a));
+            vAtt = j.att + j.attempts.length;
+          }
+        }
+      }
+    } catch (e) { /* next round retries */ }
+    setTimeout(pollLive, liveActive() ? 350 : 700);
+  }
+
+  let sending = false, flashTimer = null;
+  function flash(text) {
+    $("flash").textContent = text;
+    clearTimeout(flashTimer);
+    if (text) flashTimer = setTimeout(() => { $("flash").textContent = ""; }, 2500);
+  }
+  $("guessbar").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("guess"), text = input.value.trim();
+    if (!text || sending) return;
+    sending = true;
+    try {
+      const res = await api("guess", "POST", { text });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        input.value = "";
+        if (j.result === "close") { myClose.add(j.id); flash(t("close")); }
+        else if (j.result === "right") { flash(""); refresh(); }
+      } else if (j.error === "already_guessed" || j.error === "wrong_phase") refresh();
+      /* too_fast: keep the text, the player presses send again */
+    } catch (err) { /* offline: keep the text */ }
+    sending = false;
+    input.focus();
+  });
+
+  // ------------------------------------------------------------------ pictures for the chat
   let uploading = false, lastUpload = 0;
   function queueUpload() { if (Date.now() - lastUpload > 1000) upload(); }
   async function upload() {
@@ -338,4 +468,5 @@
 
   resetCanvas();
   poll();
+  pollLive();
 })();

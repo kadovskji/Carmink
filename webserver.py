@@ -92,6 +92,32 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
             return Response(status_code=204)
         return Response(g.snapshot, media_type="image/jpeg")
 
+    async def post_events(request, chat_id, uid):
+        if int(request.headers.get("content-length") or 0) > config.POST_MAX_BYTES:
+            return JSONResponse({"error": "bad_request"}, status_code=413)
+        try:
+            body = await request.json()
+            frm, events = body["from"], body["events"]
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"error": "bad_request"}, status_code=400)
+        return JSONResponse({"ok": True, "n": engine.post_events(chat_id, uid, frm, events)})
+
+    async def live(request, chat_id, uid):
+        def num(name):
+            try:
+                return int(request.query_params.get(name, ""))
+            except ValueError:
+                return None
+        return JSONResponse(engine.live(chat_id, num("turn"), num("since"), num("att"),
+                                        with_events=request.query_params.get("ev") != "0"))
+
+    async def guess(request, chat_id, uid):
+        try:
+            text = (await request.json())["text"]
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"error": "bad_request"}, status_code=400)
+        return JSONResponse(await engine.web_guess(chat_id, uid, text))
+
     async def health(request):
         return JSONResponse({"ok": True, "games": len(engine.games)})
 
@@ -102,6 +128,9 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
         Route("/api/start", api(start), methods=["POST"]),
         Route("/api/hint", api(hint), methods=["POST"]),
         Route("/api/skip", api(skip), methods=["POST"]),
+        Route("/api/events", api(post_events), methods=["POST"]),
+        Route("/api/live", api(live)),
+        Route("/api/guess", api(guess), methods=["POST"]),
         Route("/api/snapshot", api(post_snapshot), methods=["POST"]),
         Route("/api/snapshot.jpg", api(get_snapshot)),
         Mount("/", StaticFiles(directory=static_dir, html=True)),

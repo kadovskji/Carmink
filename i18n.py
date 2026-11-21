@@ -16,14 +16,14 @@ STRINGS: dict[str, dict[str, str]] = {
     "start_private": {
         "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\nAggiungimi a un gruppo e scrivi /newgame. "
               "Il disegnatore di turno ha 90 secondi per disegnare la parola che sceglie tra tre, gli altri provano a "
-              "indovinarla scrivendo in chat. Più sei veloce, più punti prendi; il disegnatore guadagna di più se "
+              "indovinarla (in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; il disegnatore guadagna di più se "
               "indovinano in tanti.\n\n"
               "<b>Comandi</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
               "/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt; · /stats · /mystats · /settings\n\n"
               "Nel gruppo disattiva la modalità privacy del bot o rendilo amministratore, altrimenti non vede i tentativi.",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\nAdd me to a group and type /newgame. "
               "The current drawer has 90 seconds to draw a word picked among three, the others try to guess it "
-              "by typing in the chat. The faster you guess, the more points you get; the drawer earns more when "
+              "in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess.\n\n"
               "<b>Commands</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
               "/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt; · /stats · /mystats · /settings\n\n"
@@ -32,30 +32,14 @@ STRINGS: dict[str, dict[str, str]] = {
     "help": {
         "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\n"
               "A turno uno disegna la parola scelta tra tre (90 secondi dal primo tratto), gli altri indovinano "
-              "scrivendo in chat. Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
+              "(in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
               "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori.\n\n"
               "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
               "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
               "<b>Altro</b>\n/stats · /mystats · /settings · /help",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
               "Players take turns drawing a word picked among three (90 seconds from the first stroke) while the others "
-              "guess by typing in the chat. The faster you guess, the more points you get; the drawer earns more when "
-              "many players guess, and can give hints at the cost of some points. At least 3 players are needed.\n\n"
-              "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
-              "<b>Group dictionary</b>\n/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt;\n"
-              "<b>Other</b>\n/stats · /mystats · /settings · /help",
-    },
-    "help": {
-        "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\n"
-              "A turno uno disegna la parola scelta tra tre (60 secondi dal primo tratto), gli altri indovinano "
-              "scrivendo in chat. Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
-              "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori.\n\n"
-              "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
-              "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
-              "<b>Altro</b>\n/stats · /mystats · /settings · /help",
-        "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
-              "Players take turns drawing a word picked among three (60 seconds from the first stroke) while the others "
-              "guess by typing in the chat. The faster you guess, the more points you get; the drawer earns more when "
+              "guess in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess, and can give hints at the cost of some points. At least 3 players are needed.\n\n"
               "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
               "<b>Group dictionary</b>\n/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt;\n"
@@ -119,6 +103,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "🎨 Next drawer: <b>{name}</b> (round {n}/{total}). Starting in {secs} seconds.",
     },
     "btn_open": {"it": "🖌 Apri la lavagna", "en": "🖌 Open the canvas"},
+    "btn_play": {"it": "🎮 Apri Carmink", "en": "🎮 Open Carmink"},
     "btn_watch": {"it": "👀 Guarda in diretta", "en": "👀 Watch live"},
     "skip_no_choice": {"it": "⏭ <b>{name}</b> non ha scelto la parola in tempo: turno saltato.",
                        "en": "⏭ <b>{name}</b> didn't pick a word in time: turn skipped."},
@@ -130,6 +115,14 @@ STRINGS: dict[str, dict[str, str]] = {
     "drawing_started": {
         "it": "🖌 <b>{name}</b> sta disegnando! {icon} Avete {secs} secondi: scrivete qui la parola.",
         "en": "🖌 <b>{name}</b> is drawing! {icon} You have {secs} seconds: type the word here.",
+    },
+    "drawing_started_classic": {
+        "it": "🖌 <b>{name}</b> sta disegnando! {icon} Avete {secs} secondi: indovinate nella Mini App 👇",
+        "en": "🖌 <b>{name}</b> is drawing! {icon} You have {secs} seconds: guess in the Mini App 👇",
+    },
+    "classic_chat_notice": {
+        "it": "ℹ️ {name}, in modalità Classica i tentativi si scrivono nella Mini App: questo messaggio non vale.",
+        "en": "ℹ️ {name}, in Classic mode guesses are typed in the Mini App: that message doesn't count.",
     },
     "hint_given": {"it": "💡 Suggerimento: <code>{mask}</code> (punti -{pct}%)",
                    "en": "💡 Hint: <code>{mask}</code> (points -{pct}%)"},

@@ -94,9 +94,9 @@ def test_full_turn_guess_scores_and_next_drawer(env):
     env.run(env.io.advance(10))
     env.guess(guessers[0], "boh", mid=11)                 # wrong: ignored
     assert g.scores[guessers[0]] == 0
-    env.guess(guessers[0], word.upper() + "!", mid=12)    # right: message deleted, points given
+    env.guess(guessers[0], word.upper() + "!", mid=12)    # right: points given
     expected = guess_points(config.DRAW_SECONDS - 10, t.word.diff, 0)
-    assert g.scores[guessers[0]] == expected and 12 in env.io.deleted
+    assert g.scores[guessers[0]] == expected
     env.run(env.io.advance(10))
     env.guess(guessers[1], word, mid=13)                  # last one: round ends at once
     second = guess_points(40, t.word.diff, 0)
@@ -164,11 +164,11 @@ def test_spoilers_from_drawer_and_from_players_who_already_guessed_are_deleted(e
     t = env.to_drawing()
     word = word_of(env)
     a, b = [u for u in g.players if u != t.drawer]
-    env.guess(t.drawer, f"è un {word}", mid=21)
-    env.guess(a, word, mid=22)
-    env.guess(a, f"vi dico: {word}", mid=23)
-    env.guess(b, "ciao a tutti", mid=24)
-    assert env.io.deleted == [21, 22, 23]
+    env.chat(t.drawer, f"è un {word}", mid=21)
+    env.guess(a, word, mid=22)                           # typed in the Mini App: nothing to delete
+    env.chat(a, f"vi dico: {word}", mid=23)
+    env.chat(b, "ciao a tutti", mid=24)
+    assert env.io.deleted == [21, 23]
 
 
 def test_non_players_and_other_phases_are_ignored(env):
@@ -181,7 +181,7 @@ def test_non_players_and_other_phases_are_ignored(env):
 
 
 def test_close_guess_gets_a_hint_twice_per_turn(env):
-    g = env.start_match(3)
+    g = env.start_match(3, mode="speedrun")
     t = env.to_choosing()
     longest = max(range(3), key=lambda i: len(words.compact(t.choices[i].word)))
     env.engine.choose(env.CHAT, t.drawer, longest)
@@ -465,3 +465,132 @@ def test_old_database_gets_the_latejoin_column(tmp_path):
     db = Database(p)
     assert db.get_settings(1) == {"lang": "en", "words": "everyone", "latejoin": "on"}
     assert db.set_setting(1, "latejoin", "off") and db.get_settings(1)["latejoin"] == "off"
+
+
+# ---------------------------------------------------------------- classic mode
+def test_classic_everybody_keeps_guessing_and_chat_messages_do_not_count(env):
+    g = env.start_match(4)                                  # classic
+    t = env.to_drawing()
+    word = t.word
+    a, b, c = [u for u in g.players if u != t.drawer]
+    env.chat(a, word.word, mid=1)                           # typed in the chat: deleted, not counted
+    assert 1 in env.io.deleted and g.scores[a] == 0
+    assert "non vale" in env.io.texts()[-1]
+    env.chat(a, word.word, mid=2)                           # the notice is sent once per turn
+    assert sum("non vale" in m for m in env.io.texts()) == 1
+    r = env.guess(a, word.word)
+    assert r["result"] == "right" and g.phase == Phase.DRAWING        # the others may go on
+    r = env.guess(b, word.word)
+    assert r["result"] == "right" and g.phase == Phase.DRAWING
+    assert env.guess(a, word.word) == "already_guessed"
+    env.guess(c, word.word)
+    assert g.phase == Phase.BREAK and set(t.guessed) == {a, b, c}
+
+
+def test_classic_attempts_are_public_but_the_answer_never_is(env):
+    g = env.start_match(3)
+    t = env.to_drawing()
+    word = t.word
+    a, b = [u for u in g.players if u != t.drawer]
+    assert env.guess(a, "boh")["result"] == "wrong"
+    assert env.guess(a, f"credo sia un {word.word}")["result"] == "wrong"
+    assert env.guess(b, word.word.upper())["result"] == "right"
+    shown = env.engine.live(env.CHAT, g.turn_no, 0, 0)["attempts"]
+    assert shown[0] == {"u": g.players[a], "t": "boh", "r": False}
+    assert shown[1]["t"] == "🙈"
+    assert shown[-1]["r"] is True and shown[-1]["t"] is None
+    assert all(word.word not in str(x) for x in shown)
+
+
+def test_classic_guess_rules(env, monkeypatch):
+    g = env.start_match(3)
+    t = env.to_choosing()
+    a, _ = [u for u in g.players if u != t.drawer]
+    assert env.guess(a, "x") == "wrong_phase"
+    env.engine.choose(env.CHAT, t.drawer, 0)
+    env.run(env.engine.start_drawing(env.CHAT, t.drawer))
+    assert env.guess(t.drawer, "x") == "is_drawer"
+    assert env.guess(99, "x") == "not_player"
+    assert env.guess(a, "   ") == "bad_request"
+    monkeypatch.setattr(config, "GUESS_MIN_INTERVAL", 1.0)
+    assert env.guess(a, "uno")["result"] == "wrong"
+    assert env.guess(a, "due") == "too_fast"
+    env.run(env.io.advance(1.1))
+    assert env.guess(a, "tre")["result"] == "wrong"
+    assert len(env.engine.live(env.CHAT, g.turn_no, 0, 0)["attempts"]) == 2
+
+
+def test_speedrun_rejects_mini_app_guesses(env):
+    g = env.start_match(3, mode="speedrun")
+    env.to_drawing()
+    a = next(u for u in g.players if u != g.turn.drawer)
+    assert env.guess(a, "x") is None                         # goes through the chat instead
+    with pytest.raises(GameError):
+        env.run(env.engine.web_guess(env.CHAT, a, "x"))
+
+
+def test_classic_points_use_the_same_time_curve(env):
+    g = env.start_match(3)
+    t = env.to_drawing()
+    a, _ = [u for u in g.players if u != t.drawer]
+    env.run(env.io.advance(30))
+    r = env.guess(a, t.word.word)
+    assert r["pts"] == guess_points(config.DRAW_SECONDS - 30, t.word.diff, 0)
+
+
+# ---------------------------------------------------------------- live drawing events
+PEN = {"k": "s", "c": "#ff0000", "w": 7, "p": [[10, 10]]}
+
+
+def test_events_are_stored_once_and_served_incrementally(env):
+    g = env.start_match(3)
+    t = env.to_drawing()
+    e = env.engine
+    batch = [{"e": "begin", "op": PEN}, {"e": "pt", "p": [[20, 20], [30, 30]]}, {"e": "end"}]
+    assert e.post_events(env.CHAT, t.drawer, 0, batch) == 3
+    assert e.post_events(env.CHAT, t.drawer, 0, batch) == 3                      # a retry changes nothing
+    assert e.post_events(env.CHAT, t.drawer, 2, batch[2:] + [{"e": "undo"}]) == 4  # partly known batch
+    with pytest.raises(GameError):
+        e.post_events(env.CHAT, t.drawer, 9, [])                                  # a hole in the stream
+    with pytest.raises(GameError):
+        e.post_events(env.CHAT, 3 if t.drawer != 3 else 2, 0, [])                 # not the drawer
+    live = e.live(env.CHAT, g.turn_no, 0, 0)
+    assert live["turn"] == g.turn_no and len(live["events"]) == 4 and live["ev"] == 0
+    assert [x["e"] for x in e.live(env.CHAT, g.turn_no, 3, 0)["events"]] == ["undo"]
+    assert e.live(env.CHAT, g.turn_no - 1, 3, 5)["ev"] == 0                       # other turn: start over
+
+
+def test_events_are_validated_and_capped(env, monkeypatch):
+    g = env.start_match(3)
+    t = env.to_drawing()
+    e = env.engine
+    bad = [[{"e": "nope"}], [{"e": "begin", "op": {"k": "s", "c": "red", "w": 5, "p": [[1, 1]]}}],
+           [{"e": "pt", "p": [["a", 1]]}], "text", [{"e": "pt", "p": []}]]
+    for events in bad:
+        with pytest.raises(GameError):
+            e.post_events(env.CHAT, t.drawer, 0, events)
+    clamped = [{"e": "begin", "op": {"k": "s", "c": "#00ff00", "w": 5, "p": [[-50, 9999]], "x": "junk"}}]
+    e.post_events(env.CHAT, t.drawer, 0, clamped)
+    assert t.events[0]["op"] == {"k": "s", "c": "#00ff00", "w": 5.0, "p": [[0.0, 600.0]]}
+    monkeypatch.setattr(config, "EVENTS_MAX", 3)
+    with pytest.raises(GameError):
+        e.post_events(env.CHAT, t.drawer, 1, [{"e": "undo"}] * 3)
+
+
+def test_events_only_while_drawing(env):
+    env.start_match(3)
+    t = env.to_choosing()
+    with pytest.raises(GameError):
+        env.engine.post_events(env.CHAT, t.drawer, 0, [])
+
+
+def test_classic_close_attempt_is_reported_to_the_guesser_only(env):
+    g = env.start_match(3)
+    t = env.to_choosing()
+    longest = max(range(3), key=lambda i: len(words.compact(t.choices[i].word)))
+    env.engine.choose(env.CHAT, t.drawer, longest)
+    env.run(env.engine.start_drawing(env.CHAT, t.drawer))
+    a = next(u for u in g.players if u != t.drawer)
+    r = env.guess(a, t.word.word[:-1])
+    assert r["result"] == "close"
+    assert env.engine.live(env.CHAT, g.turn_no, 0, 0)["attempts"][0]["r"] is False   # public entry is a plain miss

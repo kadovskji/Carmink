@@ -117,7 +117,7 @@ def test_newgame_uses_the_group_language_by_default(env, h):
 
 
 def test_guesses_reach_the_engine(env, h):
-    env.start_match(3)
+    env.start_match(3, mode="speedrun")
     t = env.to_drawing()
     guesser = next(u for u in env.game.players if u != t.drawer)
     msg = NS(text=t.word.word, message_id=77)
@@ -228,7 +228,7 @@ def test_newgame_offers_the_three_modes_and_only_the_creator_picks(env, h):
     q = pick_mode(env, h, user_id=2, name="Bob")
     assert q.answers[-1][1] is True and env.game is None
     # a mode that is not available yet
-    q = pick_mode(env, h, mode="classic")
+    q = pick_mode(env, h, mode="broken")
     assert env.game is None and q.answers[-1][1] is True
     q = pick_mode(env, h, mode="speedrun")
     assert env.game.mode == "speedrun" and q.deleted and env.game.creator == 1
