@@ -3,7 +3,7 @@ import logging
 import time
 from typing import Awaitable, Callable
 
-from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto,
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, InputFile, InputMediaPhoto,
                       ReplyParameters)
 from telegram.error import TelegramError
 from telegram.ext import Application
@@ -30,6 +30,47 @@ class TelegramIO:
         except TelegramError as e:
             LOG.warning("send_message to %s failed: %s", chat_id, e)
             return None
+
+    @staticmethod
+    def _markup(buttons):
+        return InlineKeyboardMarkup([[InlineKeyboardButton(label, url=url)]
+                                     for label, url in buttons]) if buttons else None
+
+    async def send_dm(self, user_id, text, buttons=None) -> bool:
+        """A private message; False if the user never started the bot (or blocked it)."""
+        try:
+            await self.app.bot.send_message(user_id, text, parse_mode="HTML",
+                                            reply_markup=self._markup(buttons))
+            return True
+        except TelegramError as e:
+            LOG.info("private message to %s failed: %s", user_id, e)
+            return False
+
+    async def send_photo_dm(self, user_id, jpeg, caption) -> bool:
+        try:
+            await self.app.bot.send_photo(user_id, photo=jpeg, caption=caption, parse_mode="HTML")
+            return True
+        except TelegramError as e:
+            LOG.info("private photo to %s failed: %s", user_id, e)
+            return False
+
+    async def send_animation(self, chat_id, data, caption):
+        try:
+            msg = await self.app.bot.send_animation(
+                chat_id, animation=InputFile(data, filename="broken-canva.gif"),
+                caption=caption, parse_mode="HTML")
+            return msg.message_id
+        except TelegramError as e:
+            LOG.warning("send_animation to %s failed: %s", chat_id, e)
+            return None
+
+    async def edit_text(self, chat_id, message_id, text, buttons=None):
+        try:
+            await self.app.bot.edit_message_text(text, chat_id=chat_id, message_id=message_id,
+                                                 parse_mode="HTML",
+                                                 reply_markup=self._markup(buttons))
+        except TelegramError as e:      # "message is not modified", flood limits...
+            LOG.info("edit of message %s in %s skipped: %s", message_id, chat_id, e)
 
     async def send_photo(self, chat_id, jpeg, caption):
         try:

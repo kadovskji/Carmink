@@ -13,6 +13,8 @@ class Phase(Enum):
     CHOOSING = auto()   # the drawer picks one of three words
     STARTING = auto()   # word chosen, waiting for the first stroke
     DRAWING = auto()    # the clock runs, the others guess
+    WRITING = auto()    # Broken Canva: everybody sends the initial phrase to the bot
+    STEP = auto()       # Broken Canva: drawing or describing
     DONE = auto()
 
 
@@ -40,6 +42,32 @@ class Turn:
 
 
 @dataclass
+class BrokenState:
+    """Broken Canva. chains[i] is the chain started by order[i]; at pass k player order[p]
+    handles chain (p - k) mod N, so nobody ever meets the chain of their own phrase."""
+    order: list[int]
+    steps: int                                  # passes after the initial phrase, always odd
+    chains: list[list[dict]] = field(default_factory=list)
+    step: int = 0                               # 0 = initial phrases
+    inbox: dict[int, dict] = field(default_factory=dict)    # this pass: user id -> item handed in
+    given: dict[int, dict] = field(default_factory=dict)    # this pass: user id -> item received
+    drafts: dict[int, bytes] = field(default_factory=dict)  # latest drawing draft per user
+    last_draft: dict[int, float] = field(default_factory=dict)
+    status_msg: int | None = None
+
+    @property
+    def kind(self) -> str:
+        """What the players hand in at this pass: a phrase (even passes) or a drawing (odd)."""
+        return "draw" if self.step % 2 else "text"
+
+
+def broken_steps(n_players: int) -> int:
+    """Passes after the phrase: the largest odd number <= min(players - 1, BROKEN_MAX_STEPS)."""
+    s = min(n_players - 1, config.BROKEN_MAX_STEPS)
+    return max(1, s if s % 2 else s - 1)
+
+
+@dataclass
 class Game:
     chat_id: int
     lang: str
@@ -64,6 +92,11 @@ class Game:
     last_snap_at: float = 0.0
     created_at: float = field(default_factory=time.time)
     started_at: float | None = None
+    broken: BrokenState | None = None
+
+    @property
+    def min_players(self) -> int:
+        return config.MIN_PLAYERS_BROKEN if self.mode == "broken" else config.MIN_PLAYERS
 
     def name(self, uid: int) -> str:
         return self.players.get(uid) or self.names.get(uid, "?")

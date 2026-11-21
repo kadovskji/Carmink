@@ -33,14 +33,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\n"
               "A turno uno disegna la parola scelta tra tre (90 secondi dal primo tratto), gli altri indovinano "
               "(in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
-              "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori.\n\n"
+              "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori (4 per Broken Canva, il telefono senza fili di frasi e disegni).\n\n"
               "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
               "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
               "<b>Altro</b>\n/stats · /mystats · /settings · /help",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
               "Players take turns drawing a word picked among three (90 seconds from the first stroke) while the others "
               "guess in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
-              "many players guess, and can give hints at the cost of some points. At least 3 players are needed.\n\n"
+              "many players guess, and can give hints at the cost of some points. At least 3 players are needed (4 for Broken Canva, the telephone game of phrases and drawings).\n\n"
               "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
               "<b>Group dictionary</b>\n/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt;\n"
               "<b>Other</b>\n/stats · /mystats · /settings · /help",
@@ -194,3 +194,74 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "If allowed, /join also works once a match has started (Speedrun and Classic): you guess at once and draw at the end."},
     "settings_sub_words": {"it": "Chi può usare /addword e /deleteword.", "en": "Who can use /addword and /deleteword."},
 }
+
+
+# ---------------------------------------------------------------- Broken Canva
+STRINGS.update({
+    "btn_start_bot": {"it": "▶️ Avvia il bot", "en": "▶️ Start the bot"},
+    "btn_open_bot": {"it": "💬 Apri il bot", "en": "💬 Open the bot"},
+    "btn_draw": {"it": "🎨 Disegna", "en": "🎨 Draw"},
+    "bk_lobby_note": {
+        "it": "☎️ <b>Broken Canva</b>: ognuno scrive al bot, in privato, una frase buffa; poi le frasi diventano "
+              "disegni e i disegni descrizioni, passando di mano in mano. Nessun vincitore, alla fine arrivano le GIF!\n"
+              "Per entrare bisogna aver avviato il bot in privato: se /join non basta, usa il pulsante.",
+        "en": "☎️ <b>Broken Canva</b>: everybody privately sends the bot a funny phrase; then phrases turn into "
+              "drawings and drawings into descriptions, passed from hand to hand. Nobody wins, GIFs come at the end!\n"
+              "To join you must have started the bot in private: if /join isn't enough, use the button.",
+    },
+    "bk_need_dm": {
+        "it": "☎️ Per Broken Canva ogni giocatore deve prima aprire il bot in privato (altrimenti non posso scrivergli). "
+              "Tocca il pulsante, premi <b>Avvia</b> e torna qui.",
+        "en": "☎️ For Broken Canva every player must first open the bot in private (or I can't write to them). "
+              "Tap the button, press <b>Start</b> and come back here.",
+    },
+    "bk_start_ok": {"it": "✅ Perfetto, ora posso scriverti. Torna nel gruppo!",
+                    "en": "✅ Great, now I can write to you. Go back to the group!"},
+    "join_closed_broken": {"it": "Broken Canva non si può iniziare o raggiungere a partita iniziata.",
+                           "en": "Nobody can join Broken Canva once it has started."},
+    "bk_dm_failed": {
+        "it": "Non riesco a scrivere in privato a: {names}. Devono avviare il bot: per ora restano fuori.",
+        "en": "I can't write privately to: {names}. They must start the bot: they are out for now.",
+    },
+    "bk_aborted": {"it": "☎️ Partita annullata: troppi pochi giocatori.", "en": "☎️ Match cancelled: too few players."},
+    "bk_dropped": {"it": "{names} non ha mandato la frase in tempo: fuori dalla partita.",
+                   "en": "{names} didn't send a phrase in time: out of the match."},
+    "bk_write_dm": {
+        "it": "☎️ <b>Broken Canva</b>\nScrivimi qui, in un messaggio, una frase buffa o stravagante (max {max} caratteri). "
+              "Hai {time}. Gli altri dovranno disegnarla!\nPuoi cambiarla rimandandone un'altra, finché non hanno scritto tutti.",
+        "en": "☎️ <b>Broken Canva</b>\nWrite me here, in one message, a funny or peculiar phrase (max {max} characters). "
+              "You have {time}. The others will have to draw it!\nYou can change it by sending another, until everybody has written.",
+    },
+    "bk_status_write": {
+        "it": "☎️ <b>Broken Canva</b> — frasi iniziali ({n}/{total}), {secs} secondi.\nScrivete al bot in privato!\n{rows}",
+        "en": "☎️ <b>Broken Canva</b> — first phrases ({n}/{total}), {secs} seconds.\nWrite to the bot in private!\n{rows}",
+    },
+    "bk_status_draw": {
+        "it": "☎️ <b>Passo {step}/{steps}</b> — 🎨 si disegna ({n}/{total}):\n{rows}",
+        "en": "☎️ <b>Pass {step}/{steps}</b> — 🎨 drawing ({n}/{total}):\n{rows}",
+    },
+    "bk_status_describe": {
+        "it": "☎️ <b>Passo {step}/{steps}</b> — ✍️ si descrive il disegno ({n}/{total}):\n{rows}",
+        "en": "☎️ <b>Pass {step}/{steps}</b> — ✍️ describing the drawing ({n}/{total}):\n{rows}",
+    },
+    "bk_draw_dm": {
+        "it": "🎨 <b>Passo {step}/{steps}</b> — disegna questa frase, hai {secs} secondi:\n\n«{text}»",
+        "en": "🎨 <b>Pass {step}/{steps}</b> — draw this phrase, you have {secs} seconds:\n\n«{text}»",
+    },
+    "bk_describe_dm": {
+        "it": "✍️ <b>Passo {step}/{steps}</b> — descrivi questo disegno con una frase: rispondimi con un messaggio, hai {secs} secondi.",
+        "en": "✍️ <b>Pass {step}/{steps}</b> — describe this drawing with a phrase: answer with one message, you have {secs} seconds.",
+    },
+    "bk_saved": {"it": "✅ Ricevuta!", "en": "✅ Got it!"},
+    "bk_replaced": {"it": "✅ Sostituita con la nuova.", "en": "✅ Replaced with the new one."},
+    "bk_too_long": {"it": "Troppo lunga: massimo {max} caratteri.", "en": "Too long: {max} characters at most."},
+    "bk_use_app": {"it": "Ora si disegna: usa il pulsante del messaggio con la frase.",
+                   "en": "Now it's drawing time: use the button of the message with the phrase."},
+    "bk_over": {"it": "☎️ <b>Broken Canva</b> finito! Ecco come si sono trasformate le frasi:",
+                "en": "☎️ <b>Broken Canva</b> is over! Here is how the phrases turned out:"},
+    "bk_chain_caption": {"it": "☎️ Catena partita da <b>{name}</b>", "en": "☎️ Chain started by <b>{name}</b>"},
+    "bk_drawing": {"it": "(disegno)", "en": "(drawing)"},
+    "bk_gif_start": {"it": "Frase di {name}", "en": "Phrase by {name}"},
+    "bk_gif_draw": {"it": "Disegno di {name}", "en": "Drawing by {name}"},
+    "bk_gif_describe": {"it": "{name} ha scritto", "en": "{name} wrote"},
+})

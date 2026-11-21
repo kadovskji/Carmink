@@ -21,6 +21,11 @@ class FakeIO:
         self.admins: set[int] = set()
         self.timers: dict[str, tuple[float, object]] = {}
         self._next_id = 100
+        self.dms: list[dict] = []
+        self.dm_photos: list[dict] = []
+        self.animations: list[dict] = []
+        self.text_edits: list[dict] = []
+        self.dm_fail: set[int] = set()
 
     def now(self) -> float:
         return self.t
@@ -34,6 +39,26 @@ class FakeIO:
         self.sent.append({"id": mid, "chat": chat_id, "text": text, "buttons": buttons,
                           "reply_to": reply_to})
         return mid
+
+    async def send_dm(self, user_id, text, buttons=None):
+        if user_id in self.dm_fail:
+            return False
+        self.dms.append({"user": user_id, "text": text, "buttons": buttons})
+        return True
+
+    async def send_photo_dm(self, user_id, jpeg, caption):
+        if user_id in self.dm_fail:
+            return False
+        self.dm_photos.append({"user": user_id, "jpeg": jpeg, "caption": caption})
+        return True
+
+    async def send_animation(self, chat_id, data, caption):
+        mid = self._id()
+        self.animations.append({"id": mid, "chat": chat_id, "data": data, "caption": caption})
+        return mid
+
+    async def edit_text(self, chat_id, message_id, text, buttons=None):
+        self.text_edits.append({"id": message_id, "text": text, "buttons": buttons})
 
     async def send_photo(self, chat_id, jpeg, caption):
         mid = self._id()

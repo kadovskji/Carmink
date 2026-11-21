@@ -36,6 +36,13 @@
       youGuessed: "✅ Hai indovinato! +{p} punti",
       close: "🔥 Ci sei vicino!",
       rightAtt: "✅ {name} ha indovinato!",
+      bkStep: "Passo {n}/{total}",
+      bkPhrase: "Frasi iniziali",
+      bkWrite: "Scrivi la tua frase al bot, in privato. {s}s",
+      bkDescribe: "Descrivi il disegno al bot, in privato. {s}s",
+      bkWait: "Fatto! Aspettiamo gli altri… {s}s",
+      bkOut: "Questo giro guardi: non sei tra i giocatori.",
+      bkDone: "✅ Fatto",
     },
     en: {
       none: "No match running in this group.",
@@ -60,6 +67,13 @@
       youGuessed: "✅ You got it! +{p} points",
       close: "🔥 So close!",
       rightAtt: "✅ {name} got it!",
+      bkStep: "Pass {n}/{total}",
+      bkPhrase: "First phrases",
+      bkWrite: "Write your phrase to the bot, in private. {s}s",
+      bkDescribe: "Describe the drawing to the bot, in private. {s}s",
+      bkWait: "Done! Waiting for the others… {s}s",
+      bkOut: "You are only watching: you are not one of the players.",
+      bkDone: "✅ Done",
     },
   };
   let lang = "it";
@@ -106,12 +120,15 @@
     endsAt = st.ends_in != null ? performance.now() + st.ends_in * 1000 : 0;
     const key = st.turn != null ? String(st.turn) : null;
     if (key !== turnKey) {
-      turnKey = key; resetCanvas(); startSent = false; resetLive(); clearAttempts();
+      turnKey = key; resetCanvas(); startSent = false; resetLive(); clearAttempts(); bkSubmitting = false;
     }
 
     const phase = st.phase, drawer = st.role === "drawer";
-    const canvasOn = drawer && (phase === "starting" || phase === "drawing");
-    const viewOn = !drawer && phase === "drawing";
+    const broken = st.mode === "broken", bkDraw = bkDrawNow();
+    const canvasOn = (drawer && (phase === "starting" || phase === "drawing")) || bkDraw;
+    const viewOn = !drawer && !broken && phase === "drawing";
+    $("hint").hidden = broken; $("skip").hidden = broken; $("bkdone").hidden = !broken;
+    $("bkdone").textContent = t("bkDone");
     const attOn = st.mode === "classic" && phase === "drawing" && (canvasOn || viewOn);
     const guessOn = attOn && !drawer && st.in_game;
     show("choose", drawer && phase === "choosing");
@@ -127,7 +144,8 @@
     document.body.classList.toggle("has-att", attOn && drawer);
     document.body.classList.toggle("has-guess", guessOn);
     show("msg", !(canvasOn || viewOn || (drawer && phase === "choosing")));
-    $("info").textContent = st.turn ? t("round", { n: st.turn, total: st.turns }) : "Carmink";
+    if (broken && st.bk) $("info").textContent = st.bk.step ? t("bkStep", { n: st.bk.step, total: st.bk.steps }) : t("bkPhrase");
+    else $("info").textContent = st.turn ? t("round", { n: st.turn, total: st.turns }) : "Carmink";
 
     msgFn = null;
     if (st.unauth) msgFn = () => t("unauth");
@@ -138,9 +156,15 @@
     } else if (phase === "choosing" && !drawer) msgFn = () => t("choosingOther", { name: st.drawer, s: secs() });
     else if (phase === "starting" && !drawer) msgFn = () => t("startOther", { name: st.drawer });
     else if (phase === "done") msgFn = () => t("timeUp");
+    else if (broken && st.bk && !bkDraw) {
+      if (!st.bk.active) msgFn = () => t("bkOut");
+      else if (st.bk.done) msgFn = () => t("bkWait", { s: secs() });
+      else msgFn = () => t(st.bk.kind === "draw" ? "bkWait" : (phase === "writing" ? "bkWrite" : "bkDescribe"), { s: secs() });
+    }
 
     if (drawer && phase === "choosing") renderChoices();
-    if (canvasOn || viewOn) renderBoard(drawer, phase);
+    if (bkDraw) renderBkBoard();
+    else if (canvasOn || viewOn) renderBoard(drawer, phase);
     tick();
   }
 
@@ -175,8 +199,17 @@
     }
   }
 
+  function bkDrawNow() {
+    const b = st.mode === "broken" ? st.bk : null;
+    return !!(b && st.phase === "step" && b.kind === "draw" && b.active && !b.done && b.prompt != null);
+  }
+  function renderBkBoard() {
+    $("word").innerHTML = `${t("draw")} <b>${esc(st.bk.prompt)}</b>`;
+  }
+
   function tick() {
     $("clock").textContent = endsAt ? String(secs()) : "";
+    if (bkDrawNow() && endsAt && secs() === 0) bkSend(true);       // time is up: hand the drawing in
     if (msgFn) $("msg").textContent = msgFn();
     if (st.role === "drawer" && st.phase === "starting") {
       $("info").textContent = t("startYou", { s: secs() });
@@ -267,18 +300,21 @@
             r1(Math.max(0, Math.min(H, (e.clientY - r.top) * H / r.height)))];
   }
 
-  function canDraw() { return st.role === "drawer" && (st.phase === "starting" || st.phase === "drawing"); }
+  function canDraw() {
+    return bkDrawNow() || (st.role === "drawer" && (st.phase === "starting" || st.phase === "drawing"));
+  }
 
   // ---- the drawer streams its events to the server, which hands them to everybody else
   let evSent = 0, evQueue = [], inflight = null;
   function emit(ev) {
+    if (st.mode === "broken") return;     // Broken Canva: only the finished drawing is sent
     const last = evQueue[evQueue.length - 1];
     if (last && ev.e === "pt" && last.e === "pt") last.p = last.p.concat(clone(ev.p));
     else if (last && ev.e === "sh" && last.e === "sh") last.b = ev.b.slice();
     else evQueue.push(clone(ev));
   }
   async function flushEvents() {
-    if (!canDraw()) return;
+    if (!canDraw() || st.mode === "broken") return;
     if (!inflight) {
       if (!evQueue.length) return;
       inflight = { from: evSent, events: evQueue.splice(0, 400) };
@@ -450,7 +486,7 @@
 
   // ------------------------------------------------------------------ pictures for the chat
   let uploading = false, lastUpload = 0;
-  function queueUpload() { if (Date.now() - lastUpload > 1000) upload(); }
+  function queueUpload() { if (st.mode !== "broken" && Date.now() - lastUpload > 1000) upload(); }
   async function upload() {
     if (uploading || !dirty || st.phase !== "drawing" || st.role !== "drawer") return;
     uploading = true;
@@ -465,6 +501,25 @@
     uploading = false;
   }
   setInterval(upload, 1500);
+
+  // ---- Broken Canva: drafts every few seconds (used if the time runs out), the drawing at the end
+  let bkSubmitting = false;
+  async function bkSend(final) {
+    if (!bkDrawNow() || bkSubmitting || (!final && !dirty)) return;
+    if (final) bkSubmitting = true;
+    dirty = final ? dirty : false;
+    try {
+      const blob = await new Promise((resolve) => cv.toBlob(resolve, "image/jpeg", 0.72));
+      const res = await api(final ? "bk/submit" : "bk/draft", "POST", blob);
+      if (final) {
+        if (!res.ok) { const j = await res.json().catch(() => ({})); if (j.error === "bad_image") bkSubmitting = false; }
+        await refresh();
+        if (bkDrawNow()) bkSubmitting = false;     // not accepted: try again at the next tick
+      } else if (!res.ok && res.status !== 409) dirty = true;
+    } catch (e) { dirty = true; if (final) bkSubmitting = false; }
+  }
+  setInterval(() => bkSend(false), 4000);
+  $("bkdone").addEventListener("click", () => bkSend(true));
 
   resetCanvas();
   poll();

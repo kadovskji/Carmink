@@ -118,6 +118,16 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
             return JSONResponse({"error": "bad_request"}, status_code=400)
         return JSONResponse(await engine.web_guess(chat_id, uid, text))
 
+    async def bk_image(request, chat_id, uid):
+        if int(request.headers.get("content-length") or 0) > config.BROKEN_JPEG_MAX:
+            return JSONResponse({"error": "bad_image"}, status_code=413)
+        data = await request.body()
+        if request.url.path.endswith("/submit"):
+            await engine.bk_submit(chat_id, uid, data)
+        else:
+            engine.bk_draft(chat_id, uid, data)
+        return JSONResponse({"ok": True})
+
     async def health(request):
         return JSONResponse({"ok": True, "games": len(engine.games)})
 
@@ -133,6 +143,8 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
         Route("/api/guess", api(guess), methods=["POST"]),
         Route("/api/snapshot", api(post_snapshot), methods=["POST"]),
         Route("/api/snapshot.jpg", api(get_snapshot)),
+        Route("/api/bk/draft", api(bk_image), methods=["POST"]),
+        Route("/api/bk/submit", api(bk_image), methods=["POST"]),
         Mount("/", StaticFiles(directory=static_dir, html=True)),
     ]
     return Starlette(routes=routes, middleware=[Middleware(NoCache)])

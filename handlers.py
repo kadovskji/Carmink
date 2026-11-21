@@ -46,8 +46,18 @@ class Handlers:
         chat = update.effective_chat
         lang = self.db.get_lang(chat.id)
         if chat.type == "private":
-            code = (update.effective_user.language_code or "")[:2]
-            await self._reply(update, T(code if code in LANGUAGES else lang, "start_private"))
+            user = update.effective_user
+            self.db.add_dm(user.id)                 # from now on the bot may write to this user
+            code = (user.language_code or "")[:2]
+            lang = code if code in LANGUAGES else lang
+            arg = ctx.args[0] if ctx.args else ""
+            if arg[:1] == "j" and arg[1:].isdigit():   # "Start" button of a Broken Canva sign-up
+                chat_id = -int(arg[1:])
+                g = self.engine.games.get(chat_id)
+                if g and g.mode == "broken" and g.phase.name == "LOBBY":
+                    await self.engine.join(chat_id, user.id, user.first_name, g.lang)
+                return await self._reply(update, T(g.lang if g else lang, "bk_start_ok"))
+            await self._reply(update, T(lang, "start_private"))
         else:
             await self._reply(update, T(lang, "start_group"))
 
@@ -120,6 +130,13 @@ class Handlers:
         if await self._group(update):
             chat, user = update.effective_chat, update.effective_user
             await self.engine.quit(chat.id, user.id, self._lang(chat.id))
+
+    async def on_private_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """A private message may be a Broken Canva phrase."""
+        msg = update.effective_message
+        if msg and msg.text and update.effective_user:
+            self.db.add_dm(update.effective_user.id)
+            await self.engine.on_private(update.effective_user.id, msg.text)
 
     async def on_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Every group message may be a guess."""
@@ -194,7 +211,7 @@ class Handlers:
             return T(lang, key) + "\n" + "\n".join(lines) if lines else ""
         parts = [T(lang, "stats_title", games=s["games"]), block("stats_wins", s["wins"]),
                  block("stats_points", s["points"]), block("stats_guessed", s["guessed"])]
-        if s["best_game"]:
+        if s["best_game"] and s["best_game"][1]:
             parts.append(T(lang, "stats_best", name=html.escape(s["best_game"][0]),
                            pts=s["best_game"][1]))
         await self._reply(update, "\n\n".join(p for p in parts if p))

@@ -63,3 +63,5 @@ body.has-att #attempts { height: 54px; font-size: 13px; }
 #send { padding: 0 16px; border: 0; border-radius: 12px; background: var(--btn); color: var(--btn-fg); font-weight: 600; font-size: 15px; }
 #flash { min-height: 18px; font-size: 14px; font-weight: 600; text-align: center; }
 #mine { padding: 10px; font-weight: 700; color: #1f9d4c; text-align: center; }
+
+#tools #bkdone { min-width: 96px; background: var(--btn); color: var(--btn-fg); font-weight: 700; margin-left: auto; }

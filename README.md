@@ -4,7 +4,7 @@ A Telegram party game bot where players take turns drawing a word while everybod
 
 ## How a match works
 
-1. Somebody sends `/newgame` and picks the **mode** with the buttons (only the creator can pick); the others `/join`. At least 3 players are needed; `/ready` starts right away, otherwise the match starts when the sign-up window (5 minutes, extendable with `/wait`) closes.
+1. Somebody sends `/newgame` and picks the **mode** with the buttons (only the creator can pick); the others `/join`. At least 3 players are needed (4 for Broken Canva); `/ready` starts right away, otherwise the match starts when the sign-up window (5 minutes, extendable with `/wait`) closes.
 2. Every player draws in turn. With fewer than 5 players everybody draws **twice** (3 players → 6 rounds, 4 → 8); with 5 or more, once.
 3. Each turn:
 
@@ -24,7 +24,16 @@ A Telegram party game bot where players take turns drawing a word while everybod
 |---|---|---|
 | 🔥 Speedrun | available | Guesses are typed in the chat. The first correct guess wins the round |
 | 🕹️ Classic | available | Guesses are typed in the Mini App (everybody sees everybody's attempts live) and the others keep trying after somebody got it |
-| ☎️ Broken Canva | coming soon | Telephone game of phrases and drawings, nobody wins; the bot builds a GIF of every chain |
+| ☎️ Broken Canva | available | Telephone game of phrases and drawings, nobody wins; the bot builds a GIF of every chain (see below) |
+
+#### Broken Canva
+
+Needs 4+ players, and every player must have opened the bot in private first (the group message has a *Start the bot* button; without it the bot can't write to them, so `/join` is refused). Nobody can join once it has started, and there are no points or winners: only the match counts in the statistics.
+
+1. Everybody privately sends the bot a funny phrase (2 minutes, up to 120 characters; sending another replaces it). The group message shows who has written. Whoever sends nothing is dropped.
+2. Pass after pass, each player receives the last item of somebody else's chain: a phrase to **draw** in the Mini App (90 seconds from receipt, *Done* ends it early) or a drawing to **describe** with a private message (60 seconds). A pass closes as soon as everybody has answered; a missing drawing becomes the last draft or a blank canvas, a missing description becomes "…".
+3. Nobody ever receives anything derived from their own phrase, and every chain ends with a drawing. The number of passes after the phrase is the largest odd number up to `min(players − 1, 7)`.
+4. At the end the bot posts one GIF per chain (phrase → drawing → description → …, with the author of every frame). It needs Pillow and a font (`fonts-dejavu-core`); without Pillow it posts a text recap.
 
 ### Points
 
@@ -72,6 +81,7 @@ One Python process runs the bot (long polling) and the Mini App backend, side by
 | `carmink.py` | Entry point: bot + uvicorn in one event loop |
 | `engine.py` | The match: lobby, turns, timers, guesses, hints, scoring. It knows nothing about Telegram or HTTP |
 | `game.py`, `words.py` | Model and pure rules; dictionary, matching, hint masks |
+| `broken.py`, `gifmaker.py` | Broken Canva: passes, private messages, drawings; GIF of every chain (Pillow) |
 | `handlers.py`, `tg_io.py`, `admin.py` | Telegram side: commands, messages and timers, `/admin` |
 | `webserver.py`, `auth.py` | Mini App API (Starlette) and validation of Telegram's `initData` |
 | `web/` | The Mini App: `index.html`, `app.js`, `fill.js`, `style.css` |
@@ -91,7 +101,7 @@ The server owns every rule and every timer; the Mini App only draws, sends the p
 **3. Server** (Debian/Ubuntu)
 
 ```bash
-sudo apt install nginx certbot python3-certbot-nginx python3-venv git
+sudo apt install nginx certbot python3-certbot-nginx python3-venv git fonts-dejavu-core
 sudo useradd -r -m -d /opt/carmink -s /usr/sbin/nologin carmink
 sudo -u carmink git clone <repo url> /opt/carmink      # or copy the files
 cd /opt/carmink

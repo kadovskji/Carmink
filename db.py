@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS game_players (
     points INTEGER, rank INTEGER, won INTEGER,
     guessed INTEGER,            -- correct guesses
     drawn INTEGER);             -- turns drawn
+CREATE TABLE IF NOT EXISTS dm_users (            -- people who opened the bot in private: it may write to them
+    user_id INTEGER PRIMARY KEY,
+    ts INTEGER);
 CREATE INDEX IF NOT EXISTS idx_games_chat ON games(chat_id);
 CREATE INDEX IF NOT EXISTS idx_gp_chat ON game_players(chat_id);
 CREATE INDEX IF NOT EXISTS idx_gp_user ON game_players(user_id);
@@ -75,6 +78,15 @@ class Database:
         self.con.execute(f"UPDATE chat_settings SET {key} = ? WHERE chat_id = ?", (value, chat_id))
         self.con.commit()
         return True
+
+    # ------------------------------------------------------------ private chats
+    def add_dm(self, user_id: int) -> None:
+        self.con.execute("INSERT OR IGNORE INTO dm_users (user_id, ts) VALUES (?, ?)",
+                         (user_id, int(time.time())))
+        self.con.commit()
+
+    def has_dm(self, user_id: int) -> bool:
+        return bool(self.query("SELECT 1 FROM dm_users WHERE user_id = ?", (user_id,)))
 
     # ------------------------------------------------------------ known groups
     def track_chat(self, chat_id: int, title: str | None) -> None:

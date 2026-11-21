@@ -40,8 +40,18 @@ MIN_PLAYERS_TO_CONTINUE = 2  # a running match ends if fewer players are left
 
 # ---------------------------------------------------------------- game modes
 MODES = ("speedrun", "classic", "broken")
-MODES_AVAILABLE = ("speedrun", "classic")   # Broken Canva is added in a later release
+MODES_AVAILABLE = ("speedrun", "classic", "broken")
 DEFAULT_MODE = "speedrun"
+
+# ---------------------------------------------------------------- Broken Canva
+MIN_PLAYERS_BROKEN = 4
+BROKEN_MAX_STEPS = 7        # passes after the initial phrase (the chain always ends with a drawing)
+BROKEN_PHRASE_SECONDS = 120
+BROKEN_DESCRIBE_SECONDS = 60
+BROKEN_GRACE_SECONDS = 3    # extra time for the Mini App to send the drawing when its clock hits zero
+BROKEN_TEXT_MAX = 120
+BROKEN_JPEG_MAX = 600_000
+BROKEN_GIF_GAP = 1.0        # pause between two GIFs sent to the group (Telegram flood limits)
 
 # ---------------------------------------------------------------- timings, in seconds
 LOBBY_SECONDS = 300         # sign-up window

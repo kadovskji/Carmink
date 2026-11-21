@@ -227,9 +227,9 @@ def test_newgame_offers_the_three_modes_and_only_the_creator_picks(env, h):
     # somebody else presses a button: refused, nothing opens
     q = pick_mode(env, h, user_id=2, name="Bob")
     assert q.answers[-1][1] is True and env.game is None
-    # a mode that is not available yet
-    q = pick_mode(env, h, mode="broken")
-    assert env.game is None and q.answers[-1][1] is True
+    # Broken Canva needs the creator to have opened the bot in private
+    pick_mode(env, h, mode="broken")
+    assert env.game is None and env.io.sent[-1]["buttons"][0][1].endswith(f"?start=j{abs(CHAT)}")
     q = pick_mode(env, h, mode="speedrun")
     assert env.game.mode == "speedrun" and q.deleted and env.game.creator == 1
     assert "Speedrun" in env.io.texts()[-1]
@@ -249,3 +249,25 @@ def test_late_join_can_be_turned_off_in_the_settings(env, h):
     env.db.set_setting(CHAT, "latejoin", "off")
     run(env, h.join(upd(8, "Later")[0], ctx()))
     assert 8 not in env.game.players and "non si può entrare" in env.io.texts()[-1]
+
+
+def test_start_in_private_registers_the_user_and_joins_a_broken_lobby(env, h):
+    env.db.add_dm(1)
+    run(env, env.engine.new_game(CHAT, 1, "Ada", "it", "broken"))
+    assert not env.db.has_dm(2)
+    u, m = upd(2, "Bea", chat=2, kind="private")
+    run(env, h.start(u, ctx(f"j{abs(CHAT)}")))           # the "Avvia il bot" button of the group
+    assert env.db.has_dm(2) and 2 in env.game.players and "Perfetto" in m.replies[-1]
+    u, m = upd(3, "Cleo", chat=3, kind="private")
+    run(env, h.start(u, ctx("j999")))                     # no such match: just registered
+    assert env.db.has_dm(3) and 3 not in env.game.players
+
+
+def test_private_text_reaches_the_broken_game(env, h):
+    for uid in range(1, 5):
+        env.db.add_dm(uid)
+    g = env.start_match(4, "it", "broken")
+    u, _ = upd(2, "P2", chat=2, kind="private")
+    u.effective_message.text = "un'anatra con gli stivali"
+    run(env, h.on_private_text(u, ctx()))
+    assert g.broken.inbox[2]["text"] == "un'anatra con gli stivali"

@@ -84,6 +84,9 @@ def register(app: Application, h: Handlers, admin: Admin) -> None:
         filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, admin.handle_text))
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, h.on_text))
+    # group=1: runs together with the admin's handler above (one handler per group only)
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, h.on_private_text), group=1)
 
     async def on_error(update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         LOG.error("unhandled error", exc_info=ctx.error)

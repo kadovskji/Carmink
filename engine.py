@@ -14,7 +14,9 @@ from typing import Awaitable, Callable, Protocol
 import config
 import strokes
 import words
+from broken import BrokenMixin
 from db import Database
+from errors import GameError
 from game import (Game, Phase, Turn, drawer_points, guess_points, laps, ranking,
                   speedrun_drawer_points)
 from i18n import T
@@ -35,14 +37,12 @@ class IO(Protocol):
     async def is_admin(self, chat_id: int, user_id: int) -> bool: ...
     def schedule(self, name: str, delay: float, fn: Callable[[], Awaitable[None]]) -> None: ...
     def cancel(self, prefix: str) -> None: ...
-
-
-class GameError(Exception):
-    """A Mini App request that can't be honoured; `code` goes back to the client."""
-
-    def __init__(self, code: str) -> None:
-        super().__init__(code)
-        self.code = code
+    # Broken Canva
+    async def send_dm(self, user_id: int, text: str, buttons: list[Button] | None = None) -> bool: ...
+    async def send_photo_dm(self, user_id: int, jpeg: bytes, caption: str) -> bool: ...
+    async def send_animation(self, chat_id: int, data: bytes, caption: str) -> int | None: ...
+    async def edit_text(self, chat_id: int, message_id: int, text: str,
+                        buttons: list[Button] | None = None) -> None: ...
 
 
 def esc(name: str) -> str:
@@ -65,7 +65,7 @@ def chat_from_param(param: str | None) -> int | None:
 MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 
-class Engine:
+class Engine(BrokenMixin):
     def __init__(self, io: IO, db: Database, rng: random.Random | None = None) -> None:
         self.io = io
         self.db = db
@@ -130,15 +130,19 @@ class Engine:
                        mode: str = config.DEFAULT_MODE) -> None:
         if not await self.can_open(chat_id, uid, lang):
             return
+        if mode == "broken" and not self.db.has_dm(uid):
+            return await self._need_dm(chat_id, lang)
         g = Game(chat_id=chat_id, lang=lang, creator=uid, mode=mode, players={uid: name},
                  names={uid: name}, lobby_end=self.io.now() + config.LOBBY_SECONDS)
         self.games[chat_id] = g
         self.user_game[uid] = chat_id
         self._timer(g, "lobby", config.LOBBY_SECONDS, self._lobby_expired)
         LOG.info("new game in %s (%s, %s) by %s", chat_id, mode, lang, uid)
-        await self.io.send(chat_id, T(lang, "lobby_open", name=esc(name), min=config.MIN_PLAYERS,
-                                      mode=T(lang, f"mode_{mode}"),
-                                      time=fmt_duration(config.LOBBY_SECONDS)))
+        text = T(lang, "lobby_open", name=esc(name), min=g.min_players, mode=T(lang, f"mode_{mode}"),
+                 time=fmt_duration(config.LOBBY_SECONDS))
+        if mode == "broken":
+            text += "\n\n" + T(lang, "bk_lobby_note")
+        await self.io.send(chat_id, text, self._start_button(g) if mode == "broken" else None)
 
     async def join(self, chat_id: int, uid: int, name: str, lang: str) -> None:
         g = self.games.get(chat_id)
@@ -148,7 +152,12 @@ class Engine:
             return await self._say(chat_id, g.lang, "join_already")
         if uid in self.user_game:
             return await self._say(chat_id, g.lang, "join_other")
-        if g.phase != Phase.LOBBY and self.db.get_settings(chat_id)["latejoin"] == "off":
+        if g.mode == "broken":
+            if g.phase != Phase.LOBBY:
+                return await self._say(chat_id, g.lang, "join_closed_broken")
+            if not self.db.has_dm(uid):
+                return await self._need_dm(chat_id, g.lang)
+        elif g.phase != Phase.LOBBY and self.db.get_settings(chat_id)["latejoin"] == "off":
             return await self._say(chat_id, g.lang, "join_closed")
         g.players[uid] = g.names[uid] = name
         self.user_game[uid] = chat_id
@@ -164,8 +173,8 @@ class Engine:
             return await self._say(chat_id, lang, "no_lobby")
         if uid not in g.players:
             return await self._say(chat_id, g.lang, "only_players")
-        if len(g.players) < config.MIN_PLAYERS:
-            return await self._say(chat_id, g.lang, "ready_need", min=config.MIN_PLAYERS,
+        if len(g.players) < g.min_players:
+            return await self._say(chat_id, g.lang, "ready_need", min=g.min_players,
                                    n=len(g.players))
         await self._begin(g)
 
@@ -215,6 +224,8 @@ class Engine:
             return
         if len(g.players) < config.MIN_PLAYERS_TO_CONTINUE:
             return await self._finish(g, T(g.lang, "too_few") + "\n\n")
+        if g.mode == "broken":
+            return await self._bk_check_done(g)
         t = g.turn
         if t and t.drawer == uid and g.phase == Phase.DRAWING:
             await self._end_turn(g, "left")
@@ -224,13 +235,15 @@ class Engine:
             await self._end_turn(g, "all")
 
     async def _lobby_expired(self, g: Game) -> None:
-        if len(g.players) >= config.MIN_PLAYERS:
+        if len(g.players) >= g.min_players:
             return await self._begin(g)
         self._close(g)
-        await self._say(g.chat_id, g.lang, "not_enough", min=config.MIN_PLAYERS)
+        await self._say(g.chat_id, g.lang, "not_enough", min=g.min_players)
 
     # ================================================================ turns
     async def _begin(self, g: Game) -> None:
+        if g.mode == "broken":
+            return await self._bk_begin(g)
         g.pool = self.words_for(g.chat_id, g.lang)
         order = list(g.players)
         self.rng.shuffle(order)
@@ -312,6 +325,8 @@ class Engine:
         await self._next_turn(g, header)
 
     async def _finish(self, g: Game, header: str) -> None:
+        if g.mode == "broken":
+            return await self._bk_finish(g, header)
         rows = ranking(g.scores, g.players)
         top = rows[0][3] if rows else 0
         lines = [f"{MEDALS.get(r, f'{r}.')} {esc(n)} — {p}" for r, _, n, p in rows]
@@ -460,6 +475,8 @@ class Engine:
                      "in_game": uid in g.players}
         if g.deadline:
             out["ends_in"] = max(0.0, g.deadline - self.io.now())
+        if g.mode == "broken":
+            return self._bk_web_state(g, uid, out)
         t = g.turn
         if not t or g.phase == Phase.LOBBY:
             return out

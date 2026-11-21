@@ -156,3 +156,27 @@ def test_classic_guesses_and_live_events_over_http(env, client):
     assert s["mode"] == "classic" and s["me_guessed"] > 0 and "word" not in s
     live = client.get(f"/api/live?turn={g.turn_no}&since=2&att=0", headers=hdr(user_id=d)).json()
     assert live["events"] == [] and [x["r"] for x in live["attempts"]] == [False, True]
+
+
+# ---------------------------------------------------------------- Broken Canva endpoints
+def test_broken_canva_drawing_endpoints(env, client, monkeypatch):
+    monkeypatch.setattr(config, "BROKEN_GIF_GAP", 0.0)
+    for uid in range(1, 5):
+        env.db.add_dm(uid)
+    g = env.start_match(4, "it", "broken")
+    for uid in range(1, 5):
+        env.run(env.engine.on_private(uid, f"frase {uid}"))
+    assert g.phase == Phase.STEP
+    st = client.get("/api/state", headers=hdr()).json()
+    assert st["mode"] == "broken" and st["bk"]["kind"] == "draw" and st["bk"]["prompt"]
+    r = client.post("/api/bk/draft", content=JPEG, headers=hdr())
+    assert r.status_code == 200 and g.broken.drafts[1] == JPEG
+    r = client.post("/api/bk/submit", content=b"not a jpeg", headers=hdr())
+    assert r.status_code == 409 and r.json()["error"] == "bad_image"
+    r = client.post("/api/bk/submit", content=JPEG, headers=hdr())
+    assert r.status_code == 200 and g.broken.inbox[1]["jpeg"] == JPEG
+    assert client.post("/api/bk/submit", content=JPEG, headers=hdr()).json()["error"] == "already_done"
+    assert client.post("/api/bk/submit", content=JPEG, headers=hdr(user_id=77)).json()["error"] == "not_player"
+    assert client.post("/api/bk/submit", content=JPEG).status_code == 401
+    big = b"\xff\xd8\xff" + b"0" * (config.BROKEN_JPEG_MAX + 10)
+    assert client.post("/api/bk/draft", content=big, headers=hdr(user_id=2)).status_code == 413
