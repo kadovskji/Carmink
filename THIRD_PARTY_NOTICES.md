@@ -8,10 +8,7 @@ Carmink itself is released under the MIT licence (see `LICENSE`). The dictionari
 Some entries were curated (filtered for drawability and translated) from
 https://github.com/nick-aschenbach/game-words
 
-> Copyright (c) <YEAR> <COPYRIGHT HOLDER>
->
-> <-- Copy the exact "Copyright (c) ..." line from the LICENSE file of the repository above
-> and replace the two lines above with it. -->
+Copyright (c) 2014 Nick Aschenbach
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 and associated documentation files (the "Software"), to deal in the Software without
