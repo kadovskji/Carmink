@@ -36,6 +36,8 @@ class Turn:
     attempts: list[dict] = field(default_factory=list)    # classic: guesses typed in the Mini App
     last_attempt: dict[int, float] = field(default_factory=dict)
     chat_warned: set[int] = field(default_factory=set)
+    final_open: bool = False    # round over, waiting for the drawer's finished canvas
+    header: str = ""            # the round's result message, posted when the wait is over
 
     def revealed(self) -> set[int]:
         return set(self.reveal_order[:self.hints])

@@ -99,7 +99,10 @@
     let payload;
     if (body instanceof Blob) { headers["Content-Type"] = "image/jpeg"; payload = body; }
     else if (body !== undefined) { headers["Content-Type"] = "application/json"; payload = JSON.stringify(body); }
-    return fetch("/api/" + path, { method: method || "GET", headers, body: payload });
+    // a request that hangs (a flaky mobile connection) must not stall the polling loops for good
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000);
+    try { return await fetch("/api/" + path, { method: method || "GET", headers, body: payload, signal: ctl.signal }); }
+    finally { clearTimeout(timer); }
   }
 
   async function refresh() {
@@ -109,7 +112,7 @@
       else if (res.status === 401 || res.status === 400) { st = { phase: "none", unauth: true }; onState(); }
     } catch (e) { /* offline for a moment: keep trying */ }
   }
-  function poll() { refresh().finally(() => setTimeout(poll, 1000)); }
+  function poll() { refresh().finally(() => setTimeout(poll, st.role === "drawer" && st.phase === "drawing" ? 400 : 1000)); }
 
   // ------------------------------------------------------------------ rendering
   const secs = () => Math.max(0, Math.ceil((endsAt - performance.now()) / 1000));
@@ -163,6 +166,7 @@
     }
 
     if (drawer && phase === "choosing") renderChoices();
+    if (st.final && drawer) sendFinal();
     if (bkDraw) renderBkBoard();
     else if (canvasOn || viewOn) renderBoard(drawer, phase);
     tick();
@@ -305,28 +309,38 @@
   }
 
   // ---- the drawer streams its events to the server, which hands them to everybody else
-  let evSent = 0, evQueue = [], inflight = null;
+  // evLog holds every event of the turn; the first evSent are known to the server. Only events that
+  // are neither sent nor being sent may still be merged with a new one.
+  const BATCH_EVENTS = 400, BATCH_POINTS = 3000, MERGE_POINTS = 400;
+  let evSent = 0, evLog = [], sendingEnd = 0, flushing = false, flushGen = 0;
   function emit(ev) {
     if (st.mode === "broken") return;     // Broken Canva: only the finished drawing is sent
-    const last = evQueue[evQueue.length - 1];
-    if (last && ev.e === "pt" && last.e === "pt") last.p = last.p.concat(clone(ev.p));
-    else if (last && ev.e === "sh" && last.e === "sh") last.b = ev.b.slice();
-    else evQueue.push(clone(ev));
+    const i = evLog.length - 1, last = evLog[i];
+    const open = last && i >= Math.max(evSent, sendingEnd);
+    if (open && ev.e === "pt" && last.e === "pt" && last.p.length + ev.p.length <= MERGE_POINTS) last.p = last.p.concat(clone(ev.p));
+    else if (open && ev.e === "sh" && last.e === "sh") last.b = ev.b.slice();
+    else evLog.push(clone(ev));
   }
   async function flushEvents() {
-    if (!canDraw() || st.mode === "broken") return;
-    if (!inflight) {
-      if (!evQueue.length) return;
-      inflight = { from: evSent, events: evQueue.splice(0, 400) };
+    if (flushing || !canDraw() || st.mode === "broken" || evSent >= evLog.length) return;
+    flushing = true;                      // one request at a time: a second one would race the first
+    const gen = flushGen, from = evSent;
+    let n = 0, pts = 0;
+    while (from + n < evLog.length && n < BATCH_EVENTS && pts < BATCH_POINTS) {
+      const e = evLog[from + n]; pts += e.p ? e.p.length : 1; n++;
     }
+    sendingEnd = from + n;
     try {
-      const res = await api("events", "POST", inflight);
-      if (res.ok) { evSent = inflight.from + inflight.events.length; inflight = null; }
+      const res = await api("events", "POST", { from, events: evLog.slice(from, from + n) });
+      if (gen !== flushGen) return;       // another turn began meanwhile
+      if (res.ok) evSent = from + n;
       else {
         const j = await res.json().catch(() => ({}));
-        if (["gap", "bad_request", "too_many"].includes(j.error)) inflight = null;   // can't be fixed by retrying
+        if (j.error === "gap" && Number.isInteger(j.have) && j.have >= 0 && j.have < evLog.length) evSent = j.have;  // resend from what the server has
+        else if (["bad_request", "too_many"].includes(j.error)) evSent = from + n;   // can't be fixed by retrying
       }
     } catch (e) { /* offline for a moment: the same batch is sent again */ }
+    finally { if (gen === flushGen) { sendingEnd = 0; flushing = false; } }
   }
   setInterval(flushEvents, 150);
 
@@ -416,7 +430,7 @@
   const myClose = new Set();
   function resetLive() {
     vTurn = null; vSince = 0; vAtt = 0;
-    evSent = 0; evQueue = []; inflight = null; myClose.clear();
+    evSent = 0; evLog = []; sendingEnd = 0; flushing = false; flushGen++; myClose.clear();
   }
 
   function clearAttempts() { $("attempts").textContent = ""; }
@@ -501,6 +515,19 @@
     uploading = false;
   }
   setInterval(upload, 1500);
+
+  // the round is over: the server asks for the finished canvas, to post it in the chat
+  let finalBusy = false, finalDone = null;
+  async function sendFinal() {
+    if (finalBusy || finalDone === turnKey) return;
+    finalBusy = true;
+    try {
+      const blob = await new Promise((resolve) => cv.toBlob(resolve, "image/jpeg", 0.72));
+      const res = await api("snapshot?final=1", "POST", blob);
+      if (res.ok || res.status === 409) finalDone = turnKey;
+    } catch (e) { /* the next state poll tries again */ }
+    finalBusy = false;
+  }
 
   // ---- Broken Canva: drafts every few seconds (used if the time runs out), the drawing at the end
   let bkSubmitting = false;

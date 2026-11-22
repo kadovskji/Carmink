@@ -109,6 +109,9 @@ def test_drawer_flow_over_http(env, client):
     assert client.post("/api/hint", headers=hdr(user_id=other)).status_code == 409
 
     assert client.post("/api/skip", headers=hdr(user_id=d)).json() == {"ok": True}
+    assert g.turn_no == 1 and client.get("/api/state", headers=hdr(user_id=d)).json()["final"] is True
+    assert client.post("/api/snapshot?final=1", content=JPEG + b"z", headers=hdr(user_id=other)).status_code == 409
+    assert client.post("/api/snapshot?final=1", content=JPEG + b"z", headers=hdr(user_id=d)).json() == {"ok": True}
     assert g.turn_no == 2
 
 
@@ -141,7 +144,7 @@ def test_classic_guesses_and_live_events_over_http(env, client):
     assert client.post("/api/events", json={"from": 0, "events": ev}, headers=hdr(user_id=d)).json() == {"ok": True, "n": 2}
     assert client.post("/api/events", json={"from": 0, "events": ev}, headers=hdr(user_id=a)).status_code == 409
     assert client.post("/api/events", json={"events": ev}, headers=hdr(user_id=d)).status_code == 400
-    assert client.post("/api/events", json={"from": 7, "events": ev}, headers=hdr(user_id=d)).json() == {"error": "gap"}
+    assert client.post("/api/events", json={"from": 7, "events": ev}, headers=hdr(user_id=d)).json() == {"error": "gap", "have": 2}
 
     r = client.get(f"/api/live?turn={g.turn_no}&since=0&att=0", headers=hdr(user_id=a)).json()
     assert r["turn"] == g.turn_no and len(r["events"]) == 2 and r["attempts"] == []

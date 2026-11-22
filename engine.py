@@ -318,11 +318,30 @@ class Engine(BrokenMixin):
             header += "\n" + " · ".join(gained)
         else:
             header += "\n" + T(g.lang, "nobody_guessed")
-        header += "\n\n" + self._board(g) + "\n\n"
-        if t.photo_msg and g.snapshot:
+        t.header = header + "\n\n" + self._board(g) + "\n\n"
+        if reason != "left" and t.drawer in g.players and (t.events or g.snapshot):
+            # the picture in the chat must be the finished drawing: the drawer's Mini App, which
+            # sees the round is over, sends the final canvas (or we use the last one after a moment)
+            t.final_open = True
+            self._timer(g, "final", config.FINAL_SNAPSHOT_WAIT, self._final_timeout)
+            return
+        await self._show_final(g)
+
+    async def _final_timeout(self, g: Game) -> None:
+        if g.turn and g.turn.final_open:
+            await self._show_final(g)
+
+    async def _show_final(self, g: Game) -> None:
+        """Post (or complete) the picture of the round in the chat, then go on."""
+        t = g.turn
+        t.final_open = False
+        if g.snapshot:
             cap = f"{words.CATEGORY_ICON.get(t.word.cat, '')} <b>{esc(t.word.word)}</b>"
-            await self.io.edit_photo(g.chat_id, t.photo_msg, g.snapshot, cap)
-        await self._next_turn(g, header)
+            if t.photo_msg:
+                await self.io.edit_photo(g.chat_id, t.photo_msg, g.snapshot, cap)
+            else:
+                t.photo_msg = await self.io.send_photo(g.chat_id, g.snapshot, cap)
+        await self._next_turn(g, t.header)
 
     async def _finish(self, g: Game, header: str) -> None:
         if g.mode == "broken":
@@ -434,7 +453,7 @@ class Engine(BrokenMixin):
         except ValueError:
             raise GameError("bad_request")
         if isinstance(frm, bool) or not isinstance(frm, int) or not 0 <= frm <= len(t.events):
-            raise GameError("gap")
+            raise GameError("gap", have=len(t.events))
         new = clean[len(t.events) - frm:]
         if len(t.events) + len(new) > config.EVENTS_MAX:
             raise GameError("too_many")
@@ -491,6 +510,8 @@ class Engine(BrokenMixin):
             out["me_guessed"] = t.guessed[uid]
         if t.drawer == uid:
             out["role"] = "drawer"
+            if t.final_open:
+                out["final"] = True             # send the finished canvas now
             if g.phase == Phase.CHOOSING:
                 out["choices"] = [{"i": i, "word": e.word, "diff": e.diff, "cat": e.cat}
                                   for i, e in enumerate(t.choices)]
@@ -527,6 +548,17 @@ class Engine(BrokenMixin):
               icon=words.CATEGORY_ICON.get(t.word.cat, "")),
             [(T(g.lang, "btn_play" if classic else "btn_watch"),
               self.link(g.chat_id, compact=not classic))])
+
+    async def final_snapshot(self, chat_id: int, uid: int, data: bytes) -> None:
+        """The finished canvas, sent by the drawer once the round is over."""
+        g, t = self._turn_of(chat_id, uid, Phase.BREAK)
+        if not t.final_open:
+            raise GameError("wrong_phase")
+        if len(data) > config.SNAPSHOT_MAX_BYTES or data[:3] != b"\xff\xd8\xff":
+            raise GameError("bad_image")
+        g.snapshot = data
+        g.snap_ver += 1
+        await self._show_final(g)
 
     def snapshot(self, chat_id: int, uid: int, data: bytes) -> None:
         g, _ = self._turn_of(chat_id, uid, Phase.DRAWING)

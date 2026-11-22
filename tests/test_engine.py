@@ -272,7 +272,8 @@ def test_picture_is_posted_once_then_edited_only_when_it_changes(env):
     env.run(env.engine.hint(env.CHAT, t.drawer))
     env.run(env.io.advance(config.SNAPSHOT_EDIT_SECONDS))
     assert len(env.io.edits) == 2 and "<code>" in env.io.edits[1]["caption"]
-    env.run(env.io.advance(config.DRAW_SECONDS))               # time up: final edit reveals the word
+    env.run(env.io.advance(config.DRAW_SECONDS))               # time up: waiting for the final canvas
+    env.run(env.io.advance(config.FINAL_SNAPSHOT_WAIT))        # (it never came: the last one is used)
     assert f"<b>{t.word.word}</b>" in env.io.edits[-1]["caption"]
 
 
@@ -594,3 +595,63 @@ def test_classic_close_attempt_is_reported_to_the_guesser_only(env):
     r = env.guess(a, t.word.word[:-1])
     assert r["result"] == "close"
     assert env.engine.live(env.CHAT, g.turn_no, 0, 0)["attempts"][0]["r"] is False   # public entry is a plain miss
+
+
+# ---------------------------------------------------------------- the finished canvas
+def _drawn_turn(env, mode="classic", n=3, photo_first=True):
+    g = env.start_match(n, mode=mode)
+    t = env.to_drawing()
+    env.engine.post_events(env.CHAT, t.drawer, 0, [{"e": "op", "op": {"k": "x"}}])
+    if photo_first:
+        env.engine.snapshot(env.CHAT, t.drawer, JPEG)
+        env.run(env.io.advance(config.SNAPSHOT_FIRST_SECONDS))
+    return g, t
+
+
+def test_final_canvas_replaces_the_picture_when_the_round_ends(env):
+    g, t = _drawn_turn(env)
+    env.run(env.engine.skip(env.CHAT, t.drawer))
+    assert g.phase == Phase.BREAK and t.final_open and not env.io.edits
+    assert env.engine.web_state(env.CHAT, t.drawer)["final"] is True
+    assert "final" not in env.engine.web_state(env.CHAT, next(u for u in g.players if u != t.drawer))
+    env.run(env.engine.final_snapshot(env.CHAT, t.drawer, JPEG + b"final"))
+    assert not t.final_open and env.io.edits[-1]["jpeg"] == JPEG + b"final"
+    assert f"<b>{t.word.word}</b>" in env.io.edits[-1]["caption"]
+    env.run(env.io.advance(config.BREAK_SECONDS))              # and the match goes on
+    assert g.turn is not t
+
+
+def test_final_picture_is_posted_even_if_none_was_shown_before(env):
+    g, t = _drawn_turn(env, mode="speedrun", photo_first=False)
+    env.run(env.engine.skip(env.CHAT, t.drawer))
+    env.run(env.engine.final_snapshot(env.CHAT, t.drawer, JPEG))
+    assert len(env.io.photos) == 1 and f"<b>{t.word.word}</b>" in env.io.photos[0]["caption"]
+
+
+def test_without_the_final_canvas_the_round_moves_on_after_a_moment(env):
+    g, t = _drawn_turn(env, photo_first=False)
+    env.engine.snapshot(env.CHAT, t.drawer, JPEG + b"last")
+    env.run(env.engine.skip(env.CHAT, t.drawer))
+    assert t.final_open
+    env.run(env.io.advance(config.FINAL_SNAPSHOT_WAIT))
+    assert not t.final_open and env.io.photos[-1]["jpeg"] == JPEG + b"last"
+
+
+def test_final_canvas_is_only_accepted_from_the_drawer_while_waiting(env):
+    g, t = _drawn_turn(env)
+    with pytest.raises(GameError) as exc:
+        env.run(env.engine.final_snapshot(env.CHAT, t.drawer, JPEG))     # round still running
+    assert exc.value.code == "wrong_phase"
+    env.run(env.engine.skip(env.CHAT, t.drawer))
+    other = next(u for u in g.players if u != t.drawer)
+    for uid, data, code in ((other, JPEG, "not_drawer"), (t.drawer, b"nope", "bad_image")):
+        with pytest.raises(GameError) as exc:
+            env.run(env.engine.final_snapshot(env.CHAT, uid, data))
+        assert exc.value.code == code
+    assert t.final_open
+
+
+def test_no_wait_when_the_drawer_left(env):
+    g, t = _drawn_turn(env)
+    env.run(env.engine.quit(env.CHAT, t.drawer, "it"))
+    assert not t.final_open

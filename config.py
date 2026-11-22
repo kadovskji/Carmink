@@ -74,13 +74,14 @@ HINT_PENALTY = 0.2          # every hint cuts 20% of the points (guessers' and d
 SNAPSHOT_FIRST_SECONDS = 2  # first picture in the chat, this long after the first stroke
 SNAPSHOT_EDIT_SECONDS = 5   # then the picture is refreshed at most this often
 SNAPSHOT_MAX_BYTES = 400_000
+FINAL_SNAPSHOT_WAIT = 3.0    # after a round ends, this long to receive the drawer's finished canvas
 SNAPSHOT_MIN_INTERVAL = 0.8  # the Mini App may not upload faster than this
 
 # ---------------------------------------------------------------- live drawing and Mini App guesses
 EVENTS_MAX = 30000          # drawing events kept per turn
 EVENTS_PER_POST = 400
 STROKE_POINTS_MAX = 2000
-POST_MAX_BYTES = 200_000
+POST_MAX_BYTES = 600_000
 GUESS_MIN_INTERVAL = 1.0    # seconds between two attempts of the same player
 ATTEMPT_MAX_LEN = 60
 

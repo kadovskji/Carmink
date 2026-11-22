@@ -4,6 +4,7 @@
 class GameError(Exception):
     """A Mini App request that can't be honoured; `code` goes back to the client."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, **extra) -> None:
         super().__init__(code)
         self.code = code
+        self.extra = extra          # sent to the client along with the code

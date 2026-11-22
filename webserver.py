@@ -55,7 +55,7 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
             try:
                 return await handler(request, chat_id, user.user_id)
             except GameError as e:
-                return JSONResponse({"error": e.code}, status_code=409)
+                return JSONResponse({"error": e.code, **e.extra}, status_code=409)
         return wrapper
 
     async def state(request, chat_id, uid):
@@ -83,7 +83,10 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
     async def post_snapshot(request, chat_id, uid):
         if int(request.headers.get("content-length") or 0) > config.SNAPSHOT_MAX_BYTES:
             return JSONResponse({"error": "bad_image"}, status_code=413)
-        engine.snapshot(chat_id, uid, await request.body())
+        if request.query_params.get("final"):
+            await engine.final_snapshot(chat_id, uid, await request.body())
+        else:
+            engine.snapshot(chat_id, uid, await request.body())
         return JSONResponse({"ok": True})
 
     async def get_snapshot(request, chat_id, uid):
