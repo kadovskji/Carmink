@@ -19,7 +19,7 @@ from db import Database
 from errors import GameError
 from game import (Game, Phase, Turn, drawer_points, guess_points, laps, ranking,
                   speedrun_drawer_points)
-from i18n import T
+from i18n import T, dur
 
 LOG = logging.getLogger("carmink.game")
 
@@ -35,6 +35,7 @@ class IO(Protocol):
                          caption: str) -> None: ...
     async def delete(self, chat_id: int, message_id: int) -> None: ...
     async def is_admin(self, chat_id: int, user_id: int) -> bool: ...
+    async def can_delete(self, chat_id: int) -> bool: ...          # may the bot delete messages here?
     def schedule(self, name: str, delay: float, fn: Callable[[], Awaitable[None]]) -> None: ...
     def cancel(self, prefix: str) -> None: ...
     # Broken Canva
@@ -53,6 +54,12 @@ def fmt_duration(seconds: float) -> str:
     seconds = max(0, int(round(seconds)))
     m, s = divmod(seconds, 60)
     return f"{m}m {s:02d}s" if m else f"{s}s"
+
+
+def admin_button(lang: str) -> tuple[str, str]:
+    """A link that asks to promote the bot, already with the rights it needs."""
+    return (T(lang, "btn_make_admin"),
+            f"https://t.me/{config.BOT_USERNAME}?startgroup=true&admin=delete_messages")
 
 
 def chat_from_param(param: str | None) -> int | None:
@@ -132,8 +139,10 @@ class Engine(BrokenMixin):
             return
         if mode == "broken" and not self.db.has_dm(uid):
             return await self._need_dm(chat_id, lang)
+        chosen = self.db.get_settings(chat_id)["drawtime"]
         g = Game(chat_id=chat_id, lang=lang, creator=uid, mode=mode, players={uid: name},
-                 names={uid: name}, lobby_end=self.io.now() + config.LOBBY_SECONDS)
+                 names={uid: name}, lobby_end=self.io.now() + config.LOBBY_SECONDS,
+                 draw_seconds=config.DRAW_DEFAULTS[mode] if chosen == "auto" else int(chosen))
         self.games[chat_id] = g
         self.user_game[uid] = chat_id
         self._timer(g, "lobby", config.LOBBY_SECONDS, self._lobby_expired)
@@ -143,6 +152,8 @@ class Engine(BrokenMixin):
         if mode == "broken":
             text += "\n\n" + T(lang, "bk_lobby_note")
         await self.io.send(chat_id, text, self._start_button(g) if mode == "broken" else None)
+        if mode != "broken" and not await self.io.can_delete(chat_id):
+            await self.io.send(chat_id, T(lang, "need_admin_note"), [admin_button(lang)])
 
     async def join(self, chat_id: int, uid: int, name: str, lang: str) -> None:
         g = self.games.get(chat_id)
@@ -303,7 +314,7 @@ class Engine(BrokenMixin):
         g.go(Phase.BREAK)
         n = len(t.guessed)
         if g.mode == "speedrun":
-            d_pts = speedrun_drawer_points(t.win_remaining, t.hints) if n else 0
+            d_pts = speedrun_drawer_points(t.win_remaining, t.hints, g.draw_seconds) if n else 0
         else:
             d_pts = drawer_points(n, t.word.diff, t.hints)
         if d_pts and t.drawer in g.players:
@@ -366,8 +377,8 @@ class Engine(BrokenMixin):
     def _award(self, g: Game, uid: int) -> int:
         """Score a correct guess (any channel) and return the points."""
         t = g.turn
-        remaining = t.started_at + config.DRAW_SECONDS - self.io.now()
-        pts = guess_points(remaining, t.word.diff, t.hints)
+        remaining = t.started_at + g.draw_seconds - self.io.now()
+        pts = guess_points(remaining, t.word.diff, t.hints, g.draw_seconds)
         t.guessed[uid] = pts
         g.scores[uid] = g.scores.get(uid, 0) + pts
         g.guesses[uid] = g.guesses.get(uid, 0) + 1
@@ -537,14 +548,14 @@ class Engine(BrokenMixin):
         g, t = self._turn_of(chat_id, uid, Phase.STARTING)
         t.started_at = self.io.now()
         g.drawings[uid] = g.drawings.get(uid, 0) + 1
-        g.go(Phase.DRAWING, config.DRAW_SECONDS, t.started_at)
-        self._timer(g, "end", config.DRAW_SECONDS, self._time_up)
+        g.go(Phase.DRAWING, g.draw_seconds, t.started_at)
+        self._timer(g, "end", g.draw_seconds, self._time_up)
         self._timer(g, "snap", config.SNAPSHOT_FIRST_SECONDS, self._snap_tick)
         classic = g.mode == "classic"
         await self.io.send(
             g.chat_id,
             T(g.lang, "drawing_started_classic" if classic else "drawing_started",
-              name=esc(g.players[uid]), secs=config.DRAW_SECONDS,
+              name=esc(g.players[uid]), secs=dur(g.lang, g.draw_seconds),
               icon=words.CATEGORY_ICON.get(t.word.cat, "")),
             [(T(g.lang, "btn_play" if classic else "btn_watch"),
               self.link(g.chat_id, compact=not classic))])

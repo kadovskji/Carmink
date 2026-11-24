@@ -4,6 +4,14 @@ DEFAULT_LANG = "it"
 LANGUAGES = ("it", "en")
 
 
+def dur(lang: str, seconds: int) -> str:
+    """15 -> '15 secondi', 120 -> '2 minuti' (for the messages that name a time)."""
+    if seconds % 60 == 0:
+        m = seconds // 60
+        return (f"{m} minut{'o' if m == 1 else 'i'}" if lang == "it" else f"{m} minute{'' if m == 1 else 's'}")
+    return f"{seconds} secondi" if lang == "it" else f"{seconds} seconds"
+
+
 def T(lang: str, key: str, **kw) -> str:
     """Return the string `key` in `lang` (falls back to the default language)."""
     entry = STRINGS[key]
@@ -15,23 +23,23 @@ STRINGS: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------ start / help
     "start_private": {
         "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\nAggiungimi a un gruppo e scrivi /newgame. "
-              "Il disegnatore di turno ha 90 secondi per disegnare la parola che sceglie tra tre, gli altri provano a "
+              "Il disegnatore di turno ha pochi minuti per disegnare la parola che sceglie tra tre, gli altri provano a "
               "indovinarla (in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; il disegnatore guadagna di più se "
               "indovinano in tanti.\n\n"
               "<b>Comandi</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
               "/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt; · /stats · /mystats · /settings\n\n"
-              "Nel gruppo disattiva la modalità privacy del bot o rendilo amministratore, altrimenti non vede i tentativi.",
+              "Nel gruppo rendimi amministratore (con il permesso di eliminare i messaggi), altrimenti non vedo i tentativi e non posso cancellare le risposte.",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\nAdd me to a group and type /newgame. "
-              "The current drawer has 90 seconds to draw a word picked among three, the others try to guess it "
+              "The current drawer has a few minutes to draw a word picked among three, the others try to guess it "
               "in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess.\n\n"
               "<b>Commands</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
               "/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt; · /stats · /mystats · /settings\n\n"
-              "In the group, turn off the bot's privacy mode or make it an admin, or it can't see the guesses.",
+              "In the group make me an admin (with the permission to delete messages), or I can't see the guesses and can't delete the answers.",
     },
     "help": {
         "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\n"
-              "A turno uno disegna la parola scelta tra tre (90 secondi dal primo tratto), gli altri indovinano "
+              "A turno uno disegna la parola scelta tra tre (tempo dal primo tratto, regolabile in /settings: 2 minuti di default), gli altri indovinano "
               "(in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
               "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori (4 per Broken Canva, il telefono senza fili di frasi e disegni).\n\n"
               "<b>Modalità</b> (le sceglie chi usa /newgame)\n"
@@ -43,7 +51,7 @@ STRINGS: dict[str, dict[str, str]] = {
               "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
               "<b>Altro</b>\n/stats · /mystats · /settings · /help",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
-              "Players take turns drawing a word picked among three (90 seconds from the first stroke) while the others "
+              "Players take turns drawing a word picked among three (time counted from the first stroke, adjustable in /settings: 2 minutes by default) while the others "
               "guess in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess, and can give hints at the cost of some points. At least 3 players are needed (4 for Broken Canva, the telephone game of phrases and drawings).\n\n"
               "<b>Modes</b> (picked by whoever uses /newgame)\n"
@@ -123,12 +131,12 @@ STRINGS: dict[str, dict[str, str]] = {
     "skip_left": {"it": "⏭ <b>{name}</b> ha lasciato la partita: turno saltato.",
                   "en": "⏭ <b>{name}</b> left the match: turn skipped."},
     "drawing_started": {
-        "it": "🖌 <b>{name}</b> sta disegnando! {icon} Avete {secs} secondi: scrivete qui la parola.",
-        "en": "🖌 <b>{name}</b> is drawing! {icon} You have {secs} seconds: type the word here.",
+        "it": "🖌 <b>{name}</b> sta disegnando! {icon} Avete {secs}: scrivete qui la parola.",
+        "en": "🖌 <b>{name}</b> is drawing! {icon} You have {secs}: type the word here.",
     },
     "drawing_started_classic": {
-        "it": "🖌 <b>{name}</b> sta disegnando! {icon} Avete {secs} secondi: indovinate nella Mini App 👇",
-        "en": "🖌 <b>{name}</b> is drawing! {icon} You have {secs} seconds: guess in the Mini App 👇",
+        "it": "🖌 <b>{name}</b> sta disegnando! {icon} Avete {secs}: indovinate nella Mini App 👇",
+        "en": "🖌 <b>{name}</b> is drawing! {icon} You have {secs}: guess in the Mini App 👇",
     },
     "classic_chat_notice": {
         "it": "ℹ️ {name}, in modalità Classica i tentativi si scrivono nella Mini App: questo messaggio non vale.",
@@ -255,12 +263,12 @@ STRINGS.update({
         "en": "☎️ <b>Pass {step}/{steps}</b> — ✍️ describing the drawing ({n}/{total}):\n{rows}",
     },
     "bk_draw_dm": {
-        "it": "🎨 <b>Passo {step}/{steps}</b> — disegna questa frase, hai {secs} secondi:\n\n«{text}»",
-        "en": "🎨 <b>Pass {step}/{steps}</b> — draw this phrase, you have {secs} seconds:\n\n«{text}»",
+        "it": "🎨 <b>Passo {step}/{steps}</b> — disegna questa frase, hai {secs}:\n\n«{text}»",
+        "en": "🎨 <b>Pass {step}/{steps}</b> — draw this phrase, you have {secs}:\n\n«{text}»",
     },
     "bk_describe_dm": {
-        "it": "✍️ <b>Passo {step}/{steps}</b> — descrivi questo disegno con una frase: rispondimi con un messaggio, hai {secs} secondi.",
-        "en": "✍️ <b>Pass {step}/{steps}</b> — describe this drawing with a phrase: answer with one message, you have {secs} seconds.",
+        "it": "✍️ <b>Passo {step}/{steps}</b> — descrivi questo disegno con una frase: rispondimi con un messaggio, hai {secs}.",
+        "en": "✍️ <b>Pass {step}/{steps}</b> — describe this drawing with a phrase: answer with one message, you have {secs}.",
     },
     "bk_saved": {"it": "✅ Ricevuta!", "en": "✅ Got it!"},
     "bk_replaced": {"it": "✅ Sostituita con la nuova.", "en": "✅ Replaced with the new one."},
@@ -274,4 +282,36 @@ STRINGS.update({
     "bk_gif_start": {"it": "Frase di {name}", "en": "Phrase by {name}"},
     "bk_gif_draw": {"it": "Disegno di {name}", "en": "Drawing by {name}"},
     "bk_gif_describe": {"it": "{name} ha scritto", "en": "{name} wrote"},
+})
+
+
+# ---------------------------------------------------------------- drawing time, admin rights
+STRINGS.update({
+    "set_drawtime": {"it": "Tempo per disegno", "en": "Drawing time"},
+    "set_drawtime_auto": {"it": "Auto (2 min, Broken Canva 3 min)", "en": "Auto (2 min, Broken Canva 3 min)"},
+    "set_drawtime_60": {"it": "60 secondi", "en": "60 seconds"},
+    "set_drawtime_90": {"it": "90 secondi", "en": "90 seconds"},
+    "set_drawtime_120": {"it": "2 minuti", "en": "2 minutes"},
+    "set_drawtime_180": {"it": "3 minuti", "en": "3 minutes"},
+    "set_drawtime_240": {"it": "4 minuti", "en": "4 minutes"},
+    "set_drawtime_300": {"it": "5 minuti", "en": "5 minutes"},
+    "settings_sub_drawtime": {
+        "it": "Quanto dura ogni disegno, per le partite che iniziano da ora. Auto: 2 minuti in Speedrun e Classica, 3 in Broken Canva.",
+        "en": "How long each drawing lasts, for matches started from now on. Auto: 2 minutes in Speedrun and Classic, 3 in Broken Canva."},
+    "btn_make_admin": {"it": "👑 Rendimi amministratore", "en": "👑 Make me an admin"},
+    "welcome_group": {
+        "it": "🎨 Ciao! Sono <b>Carmink</b>: si disegna, gli altri indovinano. Scrivete /newgame per iniziare, /help per le regole.\n\n"
+              "Per funzionare al meglio ho bisogno di essere <b>amministratore</b> con il permesso di <b>eliminare i messaggi</b>: "
+              "così vedo i tentativi e posso cancellare le risposte esatte prima che le legga qualcuno. Tocca il pulsante e conferma.",
+        "en": "🎨 Hi! I'm <b>Carmink</b>: one draws, the others guess. Type /newgame to start, /help for the rules.\n\n"
+              "To work at my best I need to be an <b>admin</b> with the permission to <b>delete messages</b>: "
+              "that way I can see the guesses and delete correct answers before anyone reads them. Tap the button and confirm."},
+    "admin_ok": {"it": "✅ Perfetto, ora ho i permessi che mi servono. Scrivete /newgame!",
+                 "en": "✅ Great, I now have the permissions I need. Type /newgame!"},
+    "admin_missing": {
+        "it": "⚠️ Sono amministratore ma mi manca il permesso di <b>eliminare i messaggi</b>: senza non posso nascondere le risposte esatte.",
+        "en": "⚠️ I'm an admin but I'm missing the permission to <b>delete messages</b>: without it I can't hide correct answers."},
+    "need_admin_note": {
+        "it": "⚠️ Per Speedrun e Classica mi serve essere amministratore con il permesso di eliminare i messaggi: altrimenti le risposte esatte restano visibili e potrei non vedere i tentativi.",
+        "en": "⚠️ For Speedrun and Classic I need to be an admin with the permission to delete messages: otherwise correct answers stay visible and I may not see the guesses."},
 })

@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 import config
 import words
 from db import ALLOWED_SETTINGS, Database
-from engine import Engine
+from engine import Engine, admin_button
 from i18n import LANGUAGES, T
 
 LOG = logging.getLogger("carmink.bot")
@@ -284,9 +284,20 @@ class Handlers:
         change = update.my_chat_member
         if change.chat.type == "private":
             return
-        active = change.new_chat_member.status in ("member", "administrator")
+        new, old = change.new_chat_member, change.old_chat_member
+        active = new.status in ("member", "administrator")
         self.db.set_chat_active(change.chat.id, active, change.chat.title)
-        if active:
-            self._seen.add(change.chat.id)
-        else:
+        if not active:
             self._seen.discard(change.chat.id)
+            return
+        self._seen.add(change.chat.id)
+        chat_id, lang = change.chat.id, self.db.get_lang(change.chat.id)
+        can_delete = new.status == "administrator" and bool(getattr(new, "can_delete_messages", False))
+        was_in = old.status in ("member", "administrator")
+        if not was_in:                      # just added: say hello and ask for the rights it needs
+            await self.engine.io.send(chat_id, T(lang, "welcome_group"),
+                                      None if can_delete else [admin_button(lang)])
+        elif can_delete and not (old.status == "administrator" and getattr(old, "can_delete_messages", False)):
+            await self.engine.io.send(chat_id, T(lang, "admin_ok"))
+        elif new.status == "administrator" and not can_delete:
+            await self.engine.io.send(chat_id, T(lang, "admin_missing"), [admin_button(lang)])

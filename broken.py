@@ -13,7 +13,7 @@ import config
 import gifmaker
 from errors import GameError
 from game import BrokenState, Game, Phase, broken_steps
-from i18n import T
+from i18n import T, dur
 
 LOG = logging.getLogger("carmink.broken")
 
@@ -237,7 +237,7 @@ class BrokenMixin:
         bk = g.broken
         bk.inbox, bk.given, bk.drafts, bk.last_draft, bk.status_msg = {}, {}, {}, {}, None
         draw = bk.kind == "draw"
-        secs = config.DRAW_SECONDS if draw else config.BROKEN_DESCRIBE_SECONDS
+        secs = g.draw_seconds if draw else config.BROKEN_DESCRIBE_SECONDS
         g.go(Phase.STEP, secs, self.io.now())
         self._timer(g, "bk", secs + (config.BROKEN_GRACE_SECONDS if draw else 0), self._bk_timeout)
         n = len(bk.order)
@@ -257,13 +257,13 @@ class BrokenMixin:
         bk, step = g.broken, g.broken.step
         if bk.kind == "draw":
             ok = await self.io.send_dm(
-                uid, T(g.lang, "bk_draw_dm", step=step, steps=bk.steps, secs=secs,
+                uid, T(g.lang, "bk_draw_dm", step=step, steps=bk.steps, secs=dur(g.lang, secs),
                        text=_esc(src.get("text") or "…")),
                 [(T(g.lang, "btn_draw"), self.link(g.chat_id))])
         else:
             ok = await self.io.send_photo_dm(
                 uid, src.get("jpeg") or gifmaker.BLANK_JPEG,
-                T(g.lang, "bk_describe_dm", step=step, steps=bk.steps, secs=secs))
+                T(g.lang, "bk_describe_dm", step=step, steps=bk.steps, secs=dur(g.lang, secs)))
             if not ok and g.broken is bk and bk.step == step:
                 bk.inbox.setdefault(uid, self._bk_fallback(g, uid, "text"))
 

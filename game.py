@@ -95,6 +95,7 @@ class Game:
     created_at: float = field(default_factory=time.time)
     started_at: float | None = None
     broken: BrokenState | None = None
+    draw_seconds: int = config.DRAW_SECONDS    # drawing time of this match (see /settings)
 
     @property
     def min_players(self) -> int:
@@ -124,16 +125,16 @@ def hint_factor(hints: int) -> float:
     return max(0.0, 1.0 - config.HINT_PENALTY * hints)
 
 
-def guess_points(remaining: float, diff: int, hints: int) -> int:
+def guess_points(remaining: float, diff: int, hints: int, total: float | None = None) -> int:
     """Faster guess, more points; harder word and fewer hints, more points."""
-    share = max(0.0, min(1.0, remaining / config.DRAW_SECONDS))
+    share = max(0.0, min(1.0, remaining / (total or config.DRAW_SECONDS)))
     base = config.GUESS_MAX * (config.GUESS_MIN_SHARE + (1 - config.GUESS_MIN_SHARE) * share)
     return max(1, round(base * config.DIFFICULTY_MULT.get(diff, 1.0) * hint_factor(hints)))
 
 
-def speedrun_drawer_points(remaining: float, hints: int) -> int:
+def speedrun_drawer_points(remaining: float, hints: int, total: float | None = None) -> int:
     """Speedrun: the drawer earns up to DRAWER_SPEEDRUN_MAX, less the later the word is guessed."""
-    share = max(0.0, min(1.0, remaining / config.DRAW_SECONDS))
+    share = max(0.0, min(1.0, remaining / (total or config.DRAW_SECONDS)))
     base = config.DRAWER_SPEEDRUN_MAX * (config.GUESS_MIN_SHARE + (1 - config.GUESS_MIN_SHARE) * share)
     return max(1, round(base * hint_factor(hints)))
 

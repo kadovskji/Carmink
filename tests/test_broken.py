@@ -209,7 +209,7 @@ def test_missing_drawings_use_the_last_draft_or_a_blank_canvas(env):
     write_all(env)
     env.engine.bk_draft(env.CHAT, 1, jpeg("red"))
     draw_all(env, [2, 3])
-    env.run(env.io.advance(config.DRAW_SECONDS + config.BROKEN_GRACE_SECONDS))
+    env.run(env.io.advance(g.draw_seconds + config.BROKEN_GRACE_SECONDS))
     assert g.broken.step == 2
     items = [c[1] for c in g.broken.chains]
     by_author = {i["author"]: i for i in items}
@@ -316,7 +316,7 @@ def test_web_state_for_broken(env):
     write_all(env)
     st = env.engine.web_state(env.CHAT, 1)
     assert st["phase"] == "step" and st["bk"]["kind"] == "draw" and st["bk"]["prompt"].startswith("frase")
-    assert st["bk"]["active"] and not st["bk"]["done"] and 0 < st["ends_in"] <= config.DRAW_SECONDS
+    assert st["bk"]["active"] and not st["bk"]["done"] and 0 < st["ends_in"] <= g.draw_seconds
     env.run(env.engine.bk_submit(env.CHAT, 1, jpeg()))
     assert env.engine.web_state(env.CHAT, 1)["bk"]["done"] is True
     assert "prompt" not in env.engine.web_state(env.CHAT, 99)["bk"]

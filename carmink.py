@@ -93,6 +93,15 @@ def register(app: Application, h: Handlers, admin: Admin) -> None:
     app.add_error_handler(on_error)
 
 
+def default_rights():
+    """Administrator rights the bot asks for in groups: deleting messages (and so, reading all of them)."""
+    import inspect
+    from telegram import ChatAdministratorRights
+    names = [p for p in inspect.signature(ChatAdministratorRights.__init__).parameters
+             if p.startswith(("is_", "can_"))]          # the signature varies between versions
+    return ChatAdministratorRights(**{n: n in ("can_manage_chat", "can_delete_messages") for n in names})
+
+
 async def run() -> None:
     if not config.BOT_TOKEN:
         raise SystemExit("BOT_TOKEN is not set")
@@ -100,6 +109,10 @@ async def run() -> None:
 
     async def post_init(app: Application) -> None:
         await admin.notify_restart(app.bot)
+        try:                                    # suggested rights when the bot is added as an admin
+            await app.bot.set_my_default_administrator_rights(default_rights(), for_channels=False)
+        except Exception as e:
+            LOG.warning("could not set the default administrator rights: %s", e)
         try:
             await app.bot.set_my_commands([BotCommand(c, en) for c, en, _ in COMMANDS])
             await app.bot.set_my_commands([BotCommand(c, it) for c, _, it in COMMANDS],

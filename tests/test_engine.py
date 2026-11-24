@@ -464,7 +464,7 @@ def test_old_database_gets_the_latejoin_column(tmp_path):
     con.execute("INSERT INTO chat_settings VALUES (1, 'en', 'everyone')")
     con.commit(); con.close()
     db = Database(p)
-    assert db.get_settings(1) == {"lang": "en", "words": "everyone", "latejoin": "on"}
+    assert db.get_settings(1) == {"lang": "en", "words": "everyone", "latejoin": "on", "drawtime": "auto"}
     assert db.set_setting(1, "latejoin", "off") and db.get_settings(1)["latejoin"] == "off"
 
 
@@ -655,3 +655,56 @@ def test_no_wait_when_the_drawer_left(env):
     g, t = _drawn_turn(env)
     env.run(env.engine.quit(env.CHAT, t.drawer, "it"))
     assert not t.final_open
+
+
+# ---------------------------------------------------------------- drawing time (/settings)
+@pytest.mark.parametrize("mode,secs", [("speedrun", 120), ("classic", 120), ("broken", 180)])
+def test_auto_drawing_time_depends_on_the_mode(env, mode, secs):
+    for uid in range(1, 5):
+        env.db.add_dm(uid)
+    assert env.start_match(4, mode=mode).draw_seconds == secs
+
+
+@pytest.mark.parametrize("value", [60, 90, 120, 180, 240, 300])
+def test_chosen_drawing_time_is_used_by_the_clock_and_the_points(env, value):
+    env.db.set_setting(env.CHAT, "drawtime", str(value))
+    g = env.start_match(3, mode="classic")
+    assert g.draw_seconds == value
+    t = env.to_drawing()
+    assert g.deadline - env.io.now() == value
+    guesser = next(u for u in g.players if u != t.drawer)
+    env.run(env.io.advance(value / 2))
+    env.guess(guesser, t.word.word)
+    half = guess_points(value / 2, t.word.diff, 0, value)
+    assert t.guessed[guesser] == half and half == guess_points(45, t.word.diff, 0, 90)
+    env.run(env.io.advance(value))                              # the round ends at the chosen time
+    assert g.phase != Phase.DRAWING
+
+
+def test_drawing_time_setting_rejects_other_values(env):
+    assert env.db.get_settings(env.CHAT)["drawtime"] == "auto"
+    assert not env.db.set_setting(env.CHAT, "drawtime", "45")
+    assert env.db.set_setting(env.CHAT, "drawtime", "240") and env.db.set_setting(env.CHAT, "drawtime", "auto")
+
+
+def test_broken_canva_uses_the_chosen_time_for_drawings_only(env):
+    for uid in range(1, 5):
+        env.db.add_dm(uid)
+    env.db.set_setting(env.CHAT, "drawtime", "300")
+    g = env.start_match(4, mode="broken")
+    for uid in list(g.broken.order):
+        env.run(env.engine.on_private(uid, f"frase {uid}"))
+    assert g.deadline - env.io.now() == 300                     # drawing pass
+    assert "5 minuti" in env.io.dms[-1]["text"]
+
+
+def test_a_missing_bot_admin_right_is_pointed_out_for_speedrun_and_classic(env):
+    env.io.bot_can_delete = False
+    env.run(env.engine.new_game(env.CHAT, 1, "Ada", "it", "classic"))
+    last = env.io.sent[-1]
+    assert "amministratore" in last["text"] and "admin=delete_messages" in last["buttons"][0][1]
+    env.engine.games.clear(); env.engine.user_game.clear()
+    n = len(env.io.sent)
+    env.db.add_dm(1)
+    env.run(env.engine.new_game(env.CHAT, 1, "Ada", "it", "broken"))   # Broken Canva needs no deletions
+    assert all("amministratore" not in m["text"] for m in env.io.sent[n:])

@@ -99,6 +99,14 @@ class TelegramIO:
         except TelegramError as e:      # the bot is not an admin with "delete messages"
             LOG.info("could not delete message %s in %s: %s", message_id, chat_id, e)
 
+    async def can_delete(self, chat_id):
+        try:
+            me = await self.app.bot.get_chat_member(chat_id, self.app.bot.id)
+        except TelegramError:
+            return True                 # can't tell: don't nag
+        return me.status == "creator" or (me.status == "administrator"
+                                          and bool(getattr(me, "can_delete_messages", False)))
+
     async def is_admin(self, chat_id, user_id):
         try:
             member = await self.app.bot.get_chat_member(chat_id, user_id)

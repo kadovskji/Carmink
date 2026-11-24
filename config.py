@@ -59,7 +59,9 @@ WAIT_MAX_MINUTES = 10       # max extension per /wait
 BREAK_SECONDS = 10          # pause between two turns (the next drawer is announced)
 CHOOSE_SECONDS = 10         # the drawer must pick one of the three words
 START_SECONDS = 20          # then must start drawing; otherwise the turn is skipped
-DRAW_SECONDS = 90           # drawing time, counted from the first stroke
+DRAW_CHOICES = (60, 90, 120, 180, 240, 300)     # what /settings offers for the drawing time
+DRAW_DEFAULTS = {"speedrun": 120, "classic": 120, "broken": 180}   # the group setting "auto"
+DRAW_SECONDS = DRAW_DEFAULTS["classic"]   # fallback; a match has its own `draw_seconds`
 
 # ---------------------------------------------------------------- points
 GUESS_MAX = 100             # a guess at the very first second

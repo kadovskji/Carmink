@@ -8,7 +8,8 @@
     tg.expand();
     try { tg.disableVerticalSwipes(); } catch (e) { /* older clients */ }
   }
-  const initData = (tg && tg.initData) || "";
+  // read when needed: on some desktop clients the data is not there yet at the very first moment
+  const getInit = () => (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || "";
   const $ = (id) => document.getElementById(id);
 
   // ------------------------------------------------------------------ texts
@@ -95,7 +96,7 @@
   let choicesKey = "";
 
   async function api(path, method, body) {
-    const headers = { Authorization: "tma " + initData };
+    const headers = { Authorization: "tma " + getInit() };
     let payload;
     if (body instanceof Blob) { headers["Content-Type"] = "image/jpeg"; payload = body; }
     else if (body !== undefined) { headers["Content-Type"] = "application/json"; payload = JSON.stringify(body); }
@@ -166,6 +167,7 @@
     }
 
     if (drawer && phase === "choosing") renderChoices();
+    fitLayout();
     if (st.final && drawer) sendFinal();
     if (bkDraw) renderBkBoard();
     else if (canvasOn || viewOn) renderBoard(drawer, phase);
@@ -296,6 +298,24 @@
     return out;
   }
 
+  // The canvas is as large as the free area allows, 4:3. Done here and not only in CSS because
+  // desktop webviews can lack dvh / aspect-ratio, and the window there can be resized freely.
+  function fitLayout() {
+    document.body.style.height = (window.innerHeight || document.documentElement.clientHeight) + "px";
+    const stage = $("stage");
+    if ($("board").hidden || !stage) return;
+    const aw = stage.clientWidth, ah = stage.clientHeight;
+    if (aw < 40 || ah < 40) return;
+    const w = Math.floor(Math.min(aw, ah * 4 / 3));
+    cv.style.width = w + "px";
+    cv.style.height = Math.floor(w * 3 / 4) + "px";
+  }
+  window.addEventListener("resize", fitLayout);
+  window.addEventListener("orientationchange", () => setTimeout(fitLayout, 150));
+  if (tg && tg.onEvent) tg.onEvent("viewportChanged", fitLayout);
+  if (window.ResizeObserver) new ResizeObserver(fitLayout).observe($("stage"));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { refresh(); fitLayout(); } });
+
   function resetCanvas() { board.reset(); dirty = false; white(); updateUndo(); }
 
   function point(e) {
@@ -353,15 +373,24 @@
     return true;
   }
 
+  // A stroke can be left open when the "up" never arrives (mouse released outside the window, focus
+  // lost, pointer capture refused by a desktop webview): it is closed by any sign that it is over,
+  // and a new press closes a stale one instead of being ignored.
+  let activeId = null, lastMove = 0, lastPt = null;
   cv.addEventListener("pointerdown", (e) => {
-    if (!canDraw() || board.cur) return;
+    if (!canDraw()) return;
+    if (board.cur) {
+      if (e.pointerId !== activeId && Date.now() - lastMove < 600) return;    // a second finger
+      endStroke();                                                            // stale stroke
+    }
     e.preventDefault();
+    activeId = e.pointerId; lastMove = Date.now();
     try { cv.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or lost pointer */ }
     if (!startSent && st.phase === "starting") {
       startSent = true;
       api("start", "POST").then((r) => { if (!r.ok) startSent = false; }).catch(() => { startSent = false; });
     }
-    const p = point(e);
+    const p = lastPt = point(e);
     if (tool === "fill") { local({ e: "op", op: { k: "f", c: color, x: Math.floor(p[0]), y: Math.floor(p[1]) } }, true); return; }
     if (tool === "pen" || tool === "eraser") {
       local({ e: "begin", op: { k: "s", c: tool === "eraser" ? "#ffffff" : color, w: tool === "eraser" ? size * 2 : size, p: [p] } });
@@ -372,21 +401,29 @@
   });
 
   cv.addEventListener("pointermove", (e) => {
-    if (!board.cur) return;
+    if (!board.cur || e.pointerId !== activeId) return;
+    if (e.pointerType === "mouse" && e.buttons === 0) return endStroke(e);    // released elsewhere
     e.preventDefault();
+    lastMove = Date.now();
     let events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     if (!events.length) events = [e];     // not supported, or synthetic event
     const pts = events.map(point);
+    lastPt = pts[pts.length - 1];
     if (board.cur.k === "s") local({ e: "pt", p: pts });
     else local({ e: "sh", b: pts[pts.length - 1] });
   });
 
   function endStroke(e) {
     if (!board.cur) return;
-    local(board.cur.k === "sh" ? { e: "end", b: point(e) } : { e: "end" }, true);
+    const b = e && /^pointer(up|move|cancel)$/.test(e.type) ? point(e) : (lastPt || board.cur.b);
+    local(board.cur.k === "sh" ? { e: "end", b } : { e: "end" }, true);
   }
-  cv.addEventListener("pointerup", endStroke);
-  cv.addEventListener("pointercancel", endStroke);
+  const ending = (e) => { if (e.pointerId === activeId) endStroke(e); };
+  cv.addEventListener("pointerup", ending);
+  cv.addEventListener("pointercancel", ending);
+  cv.addEventListener("lostpointercapture", () => endStroke());
+  window.addEventListener("pointerup", ending);            // released outside the canvas
+  window.addEventListener("blur", () => endStroke());
 
   // ------------------------------------------------------------------ buttons
   function updateUndo() { $("undo").disabled = !board.ops.length; $("redo").disabled = !board.undone.length; }

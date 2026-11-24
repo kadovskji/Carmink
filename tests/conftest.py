@@ -26,6 +26,7 @@ class FakeIO:
         self.animations: list[dict] = []
         self.text_edits: list[dict] = []
         self.dm_fail: set[int] = set()
+        self.bot_can_delete = True
 
     def now(self) -> float:
         return self.t
@@ -39,6 +40,9 @@ class FakeIO:
         self.sent.append({"id": mid, "chat": chat_id, "text": text, "buttons": buttons,
                           "reply_to": reply_to})
         return mid
+
+    async def can_delete(self, chat_id):
+        return self.bot_can_delete
 
     async def send_dm(self, user_id, text, buttons=None):
         if user_id in self.dm_fail:

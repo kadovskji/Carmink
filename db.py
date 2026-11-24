@@ -2,13 +2,15 @@
 import sqlite3
 import time
 
+import config
 import words
 
-DEFAULT_SETTINGS = {"lang": "it", "words": "admins", "latejoin": "on"}
+DEFAULT_SETTINGS = {"lang": "it", "words": "admins", "latejoin": "on", "drawtime": "auto"}
 ALLOWED_SETTINGS = {
     "lang": ("it", "en"),
     "words": ("admins", "everyone"),    # who can use /addword and /deleteword
     "latejoin": ("on", "off"),          # may players join a running speedrun / classic match?
+    "drawtime": ("auto",) + tuple(str(s) for s in config.DRAW_CHOICES),   # seconds per drawing
 }
 
 SCHEMA = """
@@ -16,7 +18,8 @@ CREATE TABLE IF NOT EXISTS chat_settings (
     chat_id INTEGER PRIMARY KEY,
     lang TEXT NOT NULL DEFAULT 'it',
     words TEXT NOT NULL DEFAULT 'admins',
-    latejoin TEXT NOT NULL DEFAULT 'on');
+    latejoin TEXT NOT NULL DEFAULT 'on',
+    drawtime TEXT NOT NULL DEFAULT 'auto');
 CREATE TABLE IF NOT EXISTS known_chats (        -- groups where the bot is (or was) present
     chat_id INTEGER PRIMARY KEY,
     title TEXT,
@@ -55,6 +58,8 @@ class Database:
         scols = [r[1] for r in self.con.execute("PRAGMA table_info(chat_settings)")]
         if "latejoin" not in scols:             # database created before this setting existed
             self.con.execute("ALTER TABLE chat_settings ADD COLUMN latejoin TEXT NOT NULL DEFAULT 'on'")
+        if "drawtime" not in scols:
+            self.con.execute("ALTER TABLE chat_settings ADD COLUMN drawtime TEXT NOT NULL DEFAULT 'auto'")
         if "alts" not in cols:                  # database created before synonyms existed
             self.con.execute("ALTER TABLE custom_words ADD COLUMN alts TEXT NOT NULL DEFAULT ''")
         self.con.commit()
@@ -64,9 +69,9 @@ class Database:
 
     # ------------------------------------------------------------ settings
     def get_settings(self, chat_id: int) -> dict:
-        rows = self.query("SELECT lang, words, latejoin FROM chat_settings WHERE chat_id = ?",
-                          (chat_id,))
-        return dict(zip(("lang", "words", "latejoin"), rows[0])) if rows else dict(DEFAULT_SETTINGS)
+        keys = tuple(DEFAULT_SETTINGS)
+        rows = self.query(f"SELECT {', '.join(keys)} FROM chat_settings WHERE chat_id = ?", (chat_id,))
+        return dict(zip(keys, rows[0])) if rows else dict(DEFAULT_SETTINGS)
 
     def get_lang(self, chat_id: int) -> str:
         return self.get_settings(chat_id)["lang"]

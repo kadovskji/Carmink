@@ -271,3 +271,51 @@ def test_private_text_reaches_the_broken_game(env, h):
     u.effective_message.text = "un'anatra con gli stivali"
     run(env, h.on_private_text(u, ctx()))
     assert g.broken.inbox[2]["text"] == "un'anatra con gli stivali"
+
+
+# ---------------------------------------------------------------- the bot is added to a group
+def member_update(old, new, chat=CHAT):
+    def m(status, delete=False):
+        return NS(status=status, can_delete_messages=delete)
+    return NS(my_chat_member=NS(chat=NS(id=chat, type="supergroup", title="Club"),
+                                old_chat_member=m(*old), new_chat_member=m(*new)))
+
+
+def test_adding_the_bot_asks_for_admin_rights(env, h):
+    run(env, h.my_chat_member(member_update(("left",), ("member",)), ctx()))
+    msg = env.io.sent[-1]
+    assert "amministratore" in msg["text"] and "eliminare i messaggi" in msg["text"]
+    assert "startgroup=true&admin=delete_messages" in msg["buttons"][0][1]
+    assert env.db.query("SELECT active FROM known_chats WHERE chat_id = ?", (CHAT,)) == [(1,)]
+
+
+def test_added_directly_as_admin_with_rights_gets_no_button(env, h):
+    run(env, h.my_chat_member(member_update(("left",), ("administrator", True)), ctx()))
+    assert env.io.sent[-1]["buttons"] is None
+
+
+def test_promotion_is_acknowledged_and_missing_rights_are_flagged(env, h):
+    run(env, h.my_chat_member(member_update(("member",), ("administrator", True)), ctx()))
+    assert "Perfetto" in env.io.sent[-1]["text"]
+    run(env, h.my_chat_member(member_update(("member",), ("administrator", False)), ctx()))
+    assert "mi manca" in env.io.sent[-1]["text"] and env.io.sent[-1]["buttons"]
+    n = len(env.io.sent)
+    run(env, h.my_chat_member(member_update(("administrator", True), ("member",)), ctx()))
+    assert len(env.io.sent) == n                                 # demoted: no message
+
+
+def test_removed_bot_is_marked_inactive(env, h):
+    run(env, h.my_chat_member(member_update(("member",), ("kicked",)), ctx()))
+    assert env.db.query("SELECT active FROM known_chats WHERE chat_id = ?", (CHAT,)) == [(0,)]
+
+
+def test_drawing_time_appears_in_the_settings_menu(env, h):
+    text, kb = h._menu(CHAT)
+    labels = [b.kw.get("text", b.args[0] if b.args else "") if hasattr(b, "kw") else b.text
+              for row in kb.inline_keyboard for b in row] if hasattr(kb, "inline_keyboard") else \
+             [b.args[0] for row in kb.args[0] for b in row]
+    assert any("Tempo per disegno" in l for l in labels)
+    text, kb = h._submenu(CHAT, "drawtime")
+    rows = kb.inline_keyboard if hasattr(kb, "inline_keyboard") else kb.args[0]
+    flat = [b for row in rows for b in row]
+    assert len(flat) == 8                                        # auto + six durations + back

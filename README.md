@@ -13,7 +13,7 @@ A Telegram party game bot where players take turns drawing a word while everybod
 | Break | 10 s | The previous word is revealed with the scores, and the next drawer is announced |
 | Choice | 10 s | The drawer picks one of **three words**, one per difficulty (easy, medium, hard) |
 | Start | 20 s | The drawer must start drawing, otherwise the turn is skipped |
-| Drawing | 90 s | The clock starts at the first stroke. The others guess by writing in the chat |
+| Drawing | 2 min (3 min in Broken Canva), adjustable in `/settings`: 60 s, 90 s, 2, 3, 4 or 5 min | The clock starts at the first stroke. The others guess by writing in the chat |
 
 4. A correct guess is deleted from the chat (so it doesn't spoil the word). In **Speedrun** the first player who guesses wins the round and it ends at once. In **Classic** guesses are typed in the Mini App; a message with the answer written in the chat is deleted and doesn't count. The round ends when everybody has guessed or time is up.
 5. When all the turns are done the final scoreboard is shown.
@@ -31,7 +31,7 @@ A Telegram party game bot where players take turns drawing a word while everybod
 Needs 4+ players, and every player must have opened the bot in private first (the group message has a *Start the bot* button; without it the bot can't write to them, so `/join` is refused). Nobody can join once it has started, and there are no points or winners: only the match counts in the statistics.
 
 1. Everybody privately sends the bot a funny phrase (2 minutes, up to 120 characters; sending another replaces it). The group message shows who has written. Whoever sends nothing is dropped.
-2. Pass after pass, each player receives the last item of somebody else's chain: a phrase to **draw** in the Mini App (90 seconds from receipt, *Done* ends it early) or a drawing to **describe** with a private message (60 seconds). A pass closes as soon as everybody has answered; a missing drawing becomes the last draft or a blank canvas, a missing description becomes "…".
+2. Pass after pass, each player receives the last item of somebody else's chain: a phrase to **draw** in the Mini App (3 minutes by default, from receipt; the same `/settings` option, *Done* ends it early) or a drawing to **describe** with a private message (60 seconds). A pass closes as soon as everybody has answered; a missing drawing becomes the last draft or a blank canvas, a missing description becomes "…".
 3. Nobody ever receives anything derived from their own phrase, and every chain ends with a drawing. The number of passes after the phrase is the largest odd number up to `min(players − 1, 7)`.
 4. At the end the bot posts one GIF per chain (phrase → drawing → description → …, with the author of every frame). It needs Pillow and a font (`fonts-dejavu-core`); without Pillow it posts a text recap.
 
@@ -39,7 +39,7 @@ Needs 4+ players, and every player must have opened the bot in private first (th
 
 | Who | Points |
 |---|---|
-| Guesser | Up to 100, falling to 40% as the 90 seconds run out; ×1 / ×1.25 / ×1.5 for easy / medium / hard words |
+| Guesser | Up to 100, falling to 40% as the drawing time runs out; ×1 / ×1.25 / ×1.5 for easy / medium / hard words |
 | Drawer | Speedrun: up to 50 when the word is guessed at once, falling to 40% of that as the time runs out. Classic: 30 for every player who guessed, with the difficulty multiplier |
 | Hints | Every hint the drawer gives (max 3) cuts 20% of the points of the guesses that follow **and** of the drawer's own points |
 
@@ -63,7 +63,7 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 | `/deleteword <word>` | Remove a word that was added with `/addword` |
 | `/stats` | Group statistics |
 | `/mystats` | Your statistics (this group, or all groups if used in private) |
-| `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match |
+| `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match, drawing time |
 | `/admin` | **Bot owner only**, private chat only: announcements, restart, git pull, log. Not shown in the command menu |
 
 ## The canvas (Mini App)
@@ -93,6 +93,7 @@ The server owns every rule and every timer; the Mini App only draws, sends the p
 
 **1. BotFather** (for @carminkgame)
 - `/setprivacy` → *Disable*, so the bot can read the guesses (or make the bot a group admin).
+- At startup the bot also registers its *default administrator rights* (delete messages), so Telegram suggests them when it is added as an admin. When added to a group it says hello and shows a button that asks for those rights (`t.me/<bot>?startgroup=true&admin=delete_messages`); `/newgame` repeats the reminder for Speedrun and Classic if the right is missing.
 - In the groups, give the bot the *Delete messages* permission.
 - `/newapp` → pick the bot, short name `app`, Web App URL `https://carmink.suketchi.art`. The direct link is `t.me/carminkgame/app`.
 
