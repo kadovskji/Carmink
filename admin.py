@@ -39,6 +39,7 @@ class Admin:
              InlineKeyboardButton("🔁 Restart", callback_data="ad:restart")],
             [InlineKeyboardButton("⬇️ Pull", callback_data="ad:pull"),
              InlineKeyboardButton("📜 Log", callback_data="ad:log")],
+            [InlineKeyboardButton("🧪 Partita di test", callback_data="ad:test")],
         ])
         return f"🛠 Pannello admin\nPartite attive: {len(self.engine.games)}", kb
 
@@ -53,6 +54,19 @@ class Admin:
         self.pending.pop(user.id, None)
         text, kb = self._menu()
         await update.message.reply_text(text, reply_markup=kb)
+
+    async def test_say(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """/t <n> <text>: write as fake player n in the running test match."""
+        chat, user = update.effective_chat, update.effective_user
+        if chat.type != "private" or not self.is_bot_admin(user.id):
+            return
+        args = ctx.args or []
+        if len(args) < 2 or not args[0].isdigit():
+            await update.message.reply_text("Uso: /t <numero giocatore> <testo>")
+            return
+        note = await self.engine.act_as(user.id, int(args[0]), " ".join(args[1:]))
+        if note:
+            await update.message.reply_text(note)
 
     async def callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         q = update.callback_query
@@ -104,6 +118,55 @@ class Admin:
                 [InlineKeyboardButton("🔁 Riavvia", callback_data="ad:restart")],
                 [InlineKeyboardButton("⬅️ Menu", callback_data="ad:menu")]])
             await q.edit_message_text(f"⬇️ Pull completato:\n\n{out}"[:4000], reply_markup=kb)
+
+        elif action == "test":
+            g = self.engine.games.get(uid)
+            if g and g.test:
+                kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("⏹ Termina il test", callback_data="ad:testend")],
+                    [InlineKeyboardButton("⬅️ Menu", callback_data="ad:menu")]])
+                await q.edit_message_text(
+                    f"🧪 Test in corso ({g.mode}, {len(g.test_ids)} giocatori finti).\n"
+                    "Gioca come Test N con /t N testo, oppure dalla Mini App scegliendo il giocatore.",
+                    reply_markup=kb)
+            else:
+                rows = [[InlineKeyboardButton(f"{emoji} {name}", callback_data=f"ad:testmode:{mode}")]
+                        for mode, emoji, name in (("speedrun", "⚡", "Speedrun"),
+                                                  ("classic", "🎨", "Classica"),
+                                                  ("broken", "📞", "Broken Canva"))]
+                rows.append([InlineKeyboardButton("⬅️ Menu", callback_data="ad:menu")])
+                await q.edit_message_text(
+                    "🧪 Partita di test: tu interpreti tutti i giocatori.\nScegli la modalità.",
+                    reply_markup=InlineKeyboardMarkup(rows))
+
+        elif action.startswith("testmode:"):
+            mode = action.split(":", 1)[1]
+            if mode not in config.MODES_AVAILABLE:
+                return
+            lo = config.MIN_PLAYERS_BROKEN if mode == "broken" else config.MIN_PLAYERS
+            row = [InlineKeyboardButton(str(n), callback_data=f"ad:testgo:{mode}:{n}")
+                   for n in range(lo, 9)]
+            await q.edit_message_text(
+                "Quanti giocatori finti?",
+                reply_markup=InlineKeyboardMarkup([row, [InlineKeyboardButton("⬅️ Indietro", callback_data="ad:test")]]))
+
+        elif action.startswith("testgo:"):
+            _, mode, n = action.split(":")
+            if mode not in config.MODES_AVAILABLE or not n.isdigit():
+                return
+            if uid in self.engine.games:
+                await q.edit_message_text("C'è già una partita di test in corso.",
+                                          reply_markup=self._back())
+                return
+            await q.edit_message_text(
+                "🧪 Partita di test avviata. Comandi: /t N testo (scrive come Test N). "
+                "Per disegnare, apri la Mini App dal pulsante e scegli il giocatore.",
+                reply_markup=self._back())
+            await self.engine.new_test_game(uid, "it", mode, int(n))
+
+        elif action == "testend":
+            await self.engine.end_test(uid)
+            await q.edit_message_text("⏹ Test terminato.", reply_markup=self._back())
 
         elif action == "log":
             lines = logs.recent(minutes=60, limit=50)

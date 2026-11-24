@@ -96,6 +96,8 @@ class Game:
     started_at: float | None = None
     broken: BrokenState | None = None
     draw_seconds: int = config.DRAW_SECONDS    # drawing time of this match (see /settings)
+    test: bool = False                          # admin test match: fake players, nothing saved
+    test_ids: list[int] = field(default_factory=list)       # fake players, in order (Test 1, Test 2…)
 
     @property
     def min_players(self) -> int:

@@ -91,12 +91,14 @@
   let st = { phase: "none" };
   let endsAt = 0;
   let turnKey = null;
+  let asUid = null;                 // test match: the fake player the admin is playing now
   let startSent = false;
   let msgFn = null;
   let choicesKey = "";
 
   async function api(path, method, body) {
     const headers = { Authorization: "tma " + getInit() };
+    if (asUid) headers["X-Test-As"] = String(asUid);      // admin test match: act as a fake player
     let payload;
     if (body instanceof Blob) { headers["Content-Type"] = "image/jpeg"; payload = body; }
     else if (body !== undefined) { headers["Content-Type"] = "application/json"; payload = JSON.stringify(body); }
@@ -110,7 +112,7 @@
     try {
       const res = await api("state");
       if (res.ok) { st = await res.json(); onState(); }
-      else if (res.status === 401 || res.status === 400) { st = { phase: "none", unauth: true }; onState(); }
+      else if (res.status === 401 || res.status === 403 || res.status === 400) { st = { phase: "none", unauth: true }; onState(); }
     } catch (e) { /* offline for a moment: keep trying */ }
   }
   function poll() { refresh().finally(() => setTimeout(poll, st.role === "drawer" && st.phase === "drawing" ? 400 : 1000)); }
@@ -119,10 +121,31 @@
   const secs = () => Math.max(0, Math.ceil((endsAt - performance.now()) / 1000));
   const show = (id, on) => { $(id).hidden = !on; };
 
+  function renderTestBar() {
+    const box = $("testbar");
+    if (!st.test) { box.hidden = true; return; }
+    if (!asUid || !st.test.players.some(p => String(p.id) === String(asUid))) {
+      asUid = st.test.players[0].id;
+      setTimeout(refresh, 0);                             // reload the state as that player
+    }
+    if (box.dataset.n !== String(st.test.players.length)) {
+      box.dataset.n = String(st.test.players.length);
+      box.innerHTML = "🧪 ";
+      const sel = document.createElement("select");
+      st.test.players.forEach(p => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name; sel.appendChild(o); });
+      sel.addEventListener("change", () => { asUid = sel.value; turnKey = null; refresh(); });
+      box.appendChild(sel);
+    }
+    const sel = box.querySelector("select");
+    if (sel && sel.value !== String(asUid)) sel.value = String(asUid);
+    box.hidden = false;
+  }
+
   function onState() {
     if (st.lang) lang = st.lang;
     endsAt = st.ends_in != null ? performance.now() + st.ends_in * 1000 : 0;
-    const key = st.turn != null ? String(st.turn) : null;
+    renderTestBar();
+    const key = st.turn != null ? String(st.turn) + "|" + (asUid || "") : null;
     if (key !== turnKey) {
       turnKey = key; resetCanvas(); startSent = false; resetLive(); clearAttempts(); bkSubmitting = false;
     }

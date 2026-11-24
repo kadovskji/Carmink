@@ -73,6 +73,7 @@ def register(app: Application, h: Handlers, admin: Admin) -> None:
                           ("mystats", h.mystats), ("settings", h.settings)):
         command(name, handler)
     app.add_handler(CommandHandler("admin", admin.admin, filters=filters.ChatType.PRIVATE))
+    app.add_handler(CommandHandler("t", admin.test_say, filters=filters.ChatType.PRIVATE))
 
     app.add_handler(CallbackQueryHandler(h.cb_settings, pattern=r"^s:"))
     app.add_handler(CallbackQueryHandler(h.cb_mode, pattern=r"^m:"))

@@ -43,7 +43,17 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
         chat_id = chat_from_param(data.start_param)
         if chat_id is None:
             return JSONResponse({"error": "no_game"}, status_code=400)
+        if chat_id > 0 and data.user_id not in config.ADMIN_IDS:    # test matches: bot admins only
+            return JSONResponse({"error": "unauthorized"}, status_code=403)
         return chat_id, data
+
+    def acting_uid(request: Request, chat_id: int, real: int) -> int:
+        """In a test match the admin may act as any of its fake players (header X-Test-As)."""
+        g = engine.games.get(chat_id)
+        raw = request.headers.get("x-test-as", "")
+        if g and g.test and chat_id == real and raw.isdigit() and int(raw) in g.test_ids:
+            return int(raw)
+        return real
 
     def api(handler):
         """Authenticate, run the handler, turn GameError into a 409."""
@@ -53,7 +63,7 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
                 return ident
             chat_id, user = ident
             try:
-                return await handler(request, chat_id, user.user_id)
+                return await handler(request, chat_id, acting_uid(request, chat_id, user.user_id))
             except GameError as e:
                 return JSONResponse({"error": e.code, **e.extra}, status_code=409)
         return wrapper

@@ -63,10 +63,15 @@ def admin_button(lang: str) -> tuple[str, str]:
 
 
 def chat_from_param(param: str | None) -> int | None:
-    """Mini App start parameter 'c1001234567' -> chat id -1001234567."""
+    """Mini App start parameter 'c1001234567' -> chat id -1001234567 ('t<id>': admin test match)."""
     if param and param[0] == "c" and param[1:].isdigit():
         return -int(param[1:])
+    if param and param[0] == "t" and param[1:].isdigit():
+        return int(param[1:])
     return None
+
+
+TEST_BASE = 9_000_000_000_000           # fake test players have ids far above any real Telegram user
 
 
 MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
@@ -82,9 +87,63 @@ class Engine(BrokenMixin):
 
     # ================================================================ helpers
     def link(self, chat_id: int, compact: bool = False) -> str:
+        g = self.games.get(chat_id)
+        param = f"t{chat_id}" if g and g.test else f"c{abs(chat_id)}"
         url = (f"https://t.me/{config.BOT_USERNAME}/{config.MINIAPP_SHORTNAME}"
-               f"?startapp=c{abs(chat_id)}")
+               f"?startapp={param}")
         return url + "&mode=compact" if compact else url
+
+    async def _del(self, g: Game, chat_id: int, message_id: int) -> None:
+        if not g.test and message_id:           # test messages come from /t: nothing to delete
+            await self.io.delete(chat_id, message_id)
+
+    # ================================================================ admin test matches
+    async def new_test_game(self, admin: int, lang: str, mode: str, n: int) -> Game | None:
+        """A match in the admin's private chat with `n` fake players he plays by himself."""
+        if admin in self.games:
+            return None
+        n = max(3 if mode != "broken" else config.MIN_PLAYERS_BROKEN, min(n, 8))
+        base = TEST_BASE + (admin % 10**7) * 100
+        ids = [base + i for i in range(1, n + 1)]
+        names = {u: f"Test {i}" for i, u in enumerate(ids, 1)}
+        chosen = self.db.get_settings(admin)["drawtime"]
+        g = Game(chat_id=admin, lang=lang, creator=ids[0], mode=mode, players=dict(names),
+                 names=dict(names), lobby_end=self.io.now(), test=True, test_ids=ids,
+                 draw_seconds=config.DRAW_DEFAULTS[mode] if chosen == "auto" else int(chosen))
+        self.games[admin] = g
+        for u in ids:
+            self.user_game[u] = admin
+        LOG.info("test game (%s, %d players) by admin %s", mode, n, admin)
+        await self._begin(g)
+        return g
+
+    async def end_test(self, admin: int) -> bool:
+        g = self.games.get(admin)
+        if not g or not g.test:
+            return False
+        self._close(g)
+        return True
+
+    async def act_as(self, admin: int, n: int, text: str) -> str | None:
+        """`/t <n> <text>`: type `text` as fake player n. Returns a note for the admin, if any."""
+        g = self.games.get(admin)
+        if not g or not g.test:
+            return "Nessuna partita di test attiva."
+        if not 1 <= n <= len(g.test_ids):
+            return f"Giocatore {n} inesistente (1-{len(g.test_ids)})."
+        uid = g.test_ids[n - 1]
+        try:
+            if g.mode == "broken":
+                if not await self.on_private(uid, text):
+                    return f"Test {n}: ora non deve scrivere nulla."
+            elif g.mode == "classic":
+                res = await self.web_guess(admin, uid, text)
+                return f"Test {n}: {res['result']}"
+            else:
+                await self.on_message(admin, uid, text, 0)
+        except GameError as e:
+            return f"Test {n}: {e.code}"
+        return None
 
     def _timer(self, g: Game, kind: str, delay: float, fn) -> None:
         """Run `fn(g)` later, unless the match moved on in the meantime."""
@@ -365,10 +424,11 @@ class Engine(BrokenMixin):
         if winners:
             text += "\n\n" + T(g.lang, "winner", names=", ".join(winners))
         duration = int(self.io.now() - (g.started_at or self.io.now()))
-        self.db.save_game(
-            g.chat_id, g.lang, g.turn_no, duration,
-            [(r, u, n, p, int(r == 1 and top > 0), g.guesses.get(u, 0), g.drawings.get(u, 0))
-             for r, u, n, p in rows])
+        if not g.test:
+            self.db.save_game(
+                g.chat_id, g.lang, g.turn_no, duration,
+                [(r, u, n, p, int(r == 1 and top > 0), g.guesses.get(u, 0), g.drawings.get(u, 0))
+                 for r, u, n, p in rows])
         LOG.info("game in %s over after %d turns", g.chat_id, g.turn_no)
         self._close(g)
         await self.io.send(g.chat_id, text)
@@ -393,11 +453,11 @@ class Engine(BrokenMixin):
         word = t.word
         if uid == t.drawer or uid in t.guessed:
             if words.contains_answer(word, text):       # don't let the answer leak
-                await self.io.delete(chat_id, message_id)
+                await self._del(g, chat_id, message_id)
             return
         if g.mode == "classic":                         # guesses are typed in the Mini App
             if words.is_correct(word, text) or words.contains_answer(word, text):
-                await self.io.delete(chat_id, message_id)
+                await self._del(g, chat_id, message_id)
                 if uid not in t.chat_warned:
                     t.chat_warned.add(uid)
                     await self._say(chat_id, g.lang, "classic_chat_notice", name=esc(g.players[uid]))
@@ -405,17 +465,17 @@ class Engine(BrokenMixin):
         if words.is_correct(word, text):
             pts = self._award(g, uid)
             if g.mode == "speedrun":                    # the first correct guess wins the round
-                await self.io.delete(chat_id, message_id)
+                await self._del(g, chat_id, message_id)
                 return await self._end_turn(g, "win")
             done = self._everyone_guessed(g)
-            await self.io.delete(chat_id, message_id)
+            await self._del(g, chat_id, message_id)
             await self._say(chat_id, g.lang, "guessed", name=esc(g.players[uid]), pts=pts)
             if done and g.phase == Phase.DRAWING:
                 await self._end_turn(g, "all")
         elif words.is_close(word, text) and \
                 t.close_notices.get(uid, 0) < config.CLOSE_NOTICES_PER_TURN:
             t.close_notices[uid] = t.close_notices.get(uid, 0) + 1
-            await self.io.send(chat_id, T(g.lang, "close"), reply_to=message_id)
+            await self.io.send(chat_id, T(g.lang, "close"), reply_to=message_id or None)
 
     # ================================================================ classic mode: guesses and live drawing
     async def web_guess(self, chat_id: int, uid: int, text: str) -> dict:
@@ -503,6 +563,8 @@ class Engine(BrokenMixin):
                      "scores": [[n, p] for _, _, n, p in ranking(g.scores, g.players)],
                      "players": list(g.players.values()), "role": "viewer",
                      "in_game": uid in g.players}
+        if g.test:
+            out["test"] = {"players": [{"id": u, "name": g.names.get(u, "?")} for u in g.test_ids]}
         if g.deadline:
             out["ends_in"] = max(0.0, g.deadline - self.io.now())
         if g.mode == "broken":

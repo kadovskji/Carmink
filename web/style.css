@@ -66,3 +66,6 @@ body.has-att #attempts { height: 54px; font-size: 13px; }
 #mine { padding: 10px; font-weight: 700; color: #1f9d4c; text-align: center; }
 
 #tools #bkdone { min-width: 96px; background: var(--btn); color: var(--btn-fg); font-weight: 700; margin-left: auto; }
+
+#testbar { padding: 4px 10px; background: #fff3cd; color: #5c4400; font-size: 14px; text-align: center; }
+#testbar select { font-size: 14px; padding: 2px 6px; }

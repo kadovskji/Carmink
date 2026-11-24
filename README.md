@@ -64,7 +64,8 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 | `/stats` | Group statistics |
 | `/mystats` | Your statistics (this group, or all groups if used in private) |
 | `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match, drawing time |
-| `/admin` | **Bot owner only**, private chat only: announcements, restart, git pull, log. Not shown in the command menu |
+| `/admin` | **Bot owner only**, private chat only: announcements, restart, git pull, log, 🧪 test match. Not shown in the command menu |
+| `/t <n> <text>` | **Bot owner only**, private chat: during a test match, writes `<text>` as fake player *n* (guess in Speedrun/Classic, phrase or description in Broken Canva) |
 
 ## The canvas (Mini App)
 
@@ -142,3 +143,7 @@ They cover the engine with a fake clock (a whole match, timeouts, hints, spoiler
 
 
 Additional words were curated (filtered for drawability and translated) from user [nick-aschenbach's game-words repository](https://github.com/nick-aschenbach/game-words/tree/master). 
+
+## Test matches (bot owner)
+
+`/admin` → **🧪 Partita di test**: pick a mode and 3–8 fake players ("Test 1…N", 4+ for Broken Canva). The match runs in your private chat: group messages and the DMs of Broken Canva all arrive there, labelled with the player. Write as a player with `/t <n> <text>`; to draw or guess in the Mini App open it from the 🎨 button and pick the player from the yellow bar at the top. Test matches don't touch the statistics and can be ended any time from the same menu.

@@ -82,6 +82,22 @@ class BrokenMixin:
             g.broken.status_msg = mid
         # (if the pass closed in the meantime the message is simply left as it is)
 
+    async def _dm(self, g: Game, uid: int, text: str, buttons=None, hint: bool = False) -> bool:
+        """A private message to a player; in a test match it lands in the admin's chat instead."""
+        if g.test:
+            n = g.test_ids.index(uid) + 1 if uid in g.test_ids else 0
+            tail = f"\n↪ /t {n} …" if hint else ""
+            await self.io.send(g.chat_id, f"📩 {g.name(uid)}\n{text}{tail}", buttons)
+            return True
+        return await self.io.send_dm(uid, text, buttons)
+
+    async def _dm_photo(self, g: Game, uid: int, jpeg: bytes, caption: str) -> bool:
+        if g.test:
+            n = g.test_ids.index(uid) + 1 if uid in g.test_ids else 0
+            await self.io.send_photo(g.chat_id, jpeg, f"📩 {g.name(uid)}\n{caption}\n↪ /t {n} …")
+            return True
+        return await self.io.send_photo_dm(uid, jpeg, caption)
+
     async def _bk_update_status(self, g: Game) -> None:
         bk = g.broken
         if bk and bk.status_msg:
@@ -95,8 +111,9 @@ class BrokenMixin:
         self.rng.shuffle(order)
         g.started_at = self.io.now()
         results = await asyncio.gather(*(
-            self.io.send_dm(u, T(g.lang, "bk_write_dm", max=config.BROKEN_TEXT_MAX,
-                                 time=f"{config.BROKEN_PHRASE_SECONDS // 60} min")) for u in order))
+            self._dm(g, u, T(g.lang, "bk_write_dm", max=config.BROKEN_TEXT_MAX,
+                             time=f"{config.BROKEN_PHRASE_SECONDS // 60} min"),
+                     hint=True) for u in order))
         failed = [u for u, ok in zip(order, results) if not ok]
         if failed:
             for u in failed:
@@ -107,7 +124,7 @@ class BrokenMixin:
                             names=", ".join(_esc(g.name(u)) for u in failed))
         if len(order) < config.MIN_PLAYERS_BROKEN:
             for u in order:
-                await self.io.send_dm(u, T(g.lang, "bk_aborted"))
+                await self._dm(g, u, T(g.lang, "bk_aborted"))
             self._close(g)
             return await self._say(g.chat_id, g.lang, "bk_aborted")
         g.broken = BrokenState(order=order, steps=broken_steps(len(order)))
@@ -128,17 +145,17 @@ class BrokenMixin:
         if uid not in bk.order or uid not in g.players:
             return False
         if bk.kind != "text":
-            await self.io.send_dm(uid, T(g.lang, "bk_use_app"))
+            await self._dm(g, uid, T(g.lang, "bk_use_app"))
             return True
         phrase = clean_phrase(text)
         if not phrase:
             return True
         if len(phrase) > config.BROKEN_TEXT_MAX:
-            await self.io.send_dm(uid, T(g.lang, "bk_too_long", max=config.BROKEN_TEXT_MAX))
+            await self._dm(g, uid, T(g.lang, "bk_too_long", max=config.BROKEN_TEXT_MAX))
             return True
         again = uid in bk.inbox
         bk.inbox[uid] = {"kind": "text", "author": uid, "name": g.name(uid), "text": phrase}
-        await self.io.send_dm(uid, T(g.lang, "bk_replaced" if again else "bk_saved"))
+        await self._dm(g, uid, T(g.lang, "bk_replaced" if again else "bk_saved"))
         await self._bk_update_status(g)
         await self._bk_check_done(g)
         return True
@@ -218,7 +235,7 @@ class BrokenMixin:
                                 names=", ".join(_esc(g.name(u)) for u in silent))
             if len(keep) < config.MIN_PLAYERS_BROKEN:
                 for u in keep:
-                    await self.io.send_dm(u, T(g.lang, "bk_aborted"))
+                    await self._dm(g, u, T(g.lang, "bk_aborted"))
                 self._close(g)
                 return await self._say(g.chat_id, g.lang, "bk_aborted")
             bk.order = keep
@@ -256,13 +273,13 @@ class BrokenMixin:
         """Send a player what to draw / describe; a player we can't reach hands in an empty answer."""
         bk, step = g.broken, g.broken.step
         if bk.kind == "draw":
-            ok = await self.io.send_dm(
+            ok = await self._dm(g, 
                 uid, T(g.lang, "bk_draw_dm", step=step, steps=bk.steps, secs=dur(g.lang, secs),
                        text=_esc(src.get("text") or "…")),
                 [(T(g.lang, "btn_draw"), self.link(g.chat_id))])
         else:
-            ok = await self.io.send_photo_dm(
-                uid, src.get("jpeg") or gifmaker.BLANK_JPEG,
+            ok = await self._dm_photo(
+                g, uid, src.get("jpeg") or gifmaker.BLANK_JPEG,
                 T(g.lang, "bk_describe_dm", step=step, steps=bk.steps, secs=dur(g.lang, secs)))
             if not ok and g.broken is bk and bk.step == step:
                 bk.inbox.setdefault(uid, self._bk_fallback(g, uid, "text"))
@@ -275,7 +292,7 @@ class BrokenMixin:
         rows = [(1, u, n, 0, 0, 0, 0) for u, n in
                 ((u, g.name(u)) for u in (bk.order if bk else g.players))]
         duration = int(self.io.now() - (g.started_at or self.io.now()))
-        if rows:
+        if rows and not g.test:
             self.db.save_game(g.chat_id, g.lang, bk.step if bk else 0, duration, rows)
         chat_id, lang = g.chat_id, g.lang
         LOG.info("broken game in %s over: %d chains", chat_id, len(chains))
