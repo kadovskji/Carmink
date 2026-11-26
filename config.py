@@ -90,7 +90,7 @@ ATTEMPT_MAX_LEN = 60
 
 # ---------------------------------------------------------------- words
 CUSTOM_ALTS_MAX = 5            # synonyms accepted per custom word
-CUSTOM_WORDS_MAX = 3000     # words in a group's dictionary (every language)
+CUSTOM_WORDS_MAX = 3000     # words in a group's dictionary, per language
 DICT_MIN_WORDS = 30         # a group cannot delete words below this many (per language)
 CHOOSE_CUSTOM_SECONDS = 30  # the drawer who taps "write your own" gets this long
 DICT_CODE_HOURS = 24        # how long a dictionary share code works

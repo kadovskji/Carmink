@@ -457,9 +457,9 @@ class Engine(BrokenMixin, DictMixin):
         if t.custom:
             if not solved:
                 return
-            if self.db.count_custom(g.chat_id) < config.CUSTOM_WORDS_MAX and self.db.add_word(
+            if self.db.count_custom(g.chat_id, g.lang) < config.CUSTOM_WORDS_MAX and self.db.add_word(
                     g.chat_id, g.lang, t.word.word, difficulty.first_level(value), t.drawer, t.word.alts,
-                    "custom", (w * value, w, 1)):
+                    "other", (w * value, w, 1)):
                 return
         self.db.record_appearance(g.chat_id, g.lang, t.word.word, value, w)
 
@@ -702,7 +702,7 @@ class Engine(BrokenMixin, DictMixin):
         if known:
             return self._take_word(g, t, known)
         t.custom = True
-        self._take_word(g, t, words.Entry(word=word, alts=alts, diff=2, cat="custom"))
+        self._take_word(g, t, words.Entry(word=word, alts=alts, diff=2, cat="other"))
 
     def _take_word(self, g: Game, t: Turn, entry: words.Entry) -> None:
         t.word = entry

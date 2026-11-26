@@ -140,6 +140,7 @@ body.dictmode #bar, body.dictmode main, body.dictmode #tools, body.dictmode #tes
 .dcard input[type=text], .dcard textarea { padding: 10px 12px; border: 2px solid var(--card); border-radius: 12px; font-size: 16px; background: var(--bg); color: var(--fg); width: 100%; }
 .dcard input:focus, .dcard textarea:focus { outline: none; border-color: var(--btn); }
 .dcard small { color: var(--hint); }
+.dcard select { padding: 10px 12px; border: 2px solid var(--card); border-radius: 12px; font-size: 16px; background: var(--bg); color: var(--fg); width: 100%; }
 .dlv { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--hint); }
 .dlv button { border: 2px solid transparent; border-radius: 12px; background: var(--card); color: var(--fg); padding: 6px 10px; }
 .dlv button.on { border-color: var(--btn); }

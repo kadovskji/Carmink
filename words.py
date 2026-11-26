@@ -7,8 +7,16 @@ from dataclasses import dataclass
 
 import config
 
-CATEGORIES = ("objects", "living", "actions")
-CATEGORY_ICON = {"objects": "🪑", "living": "🐾", "actions": "🎭", "custom": "✏️"}
+CATEGORIES = ("animals", "nature", "plants", "body", "food", "people", "places", "vehicles", "objects",
+              "actions", "sport", "music", "other")
+CATEGORY_ICON = {"animals": "🐾", "nature": "🏔", "plants": "🌿", "body": "👕", "food": "🍕", "people": "👷",
+                 "places": "🏛", "vehicles": "🚗", "objects": "🪑", "actions": "🎭", "sport": "⚽",
+                 "music": "🎸", "other": "✨"}
+
+
+def cat_of(cat: str | None) -> str:
+    """A stored category; anything unknown (and the old 'custom') is 'other'."""
+    return cat if cat in CATEGORY_ICON else "other"
 LANGUAGES = ("it", "en")
 
 
@@ -17,7 +25,7 @@ class Entry:
     word: str                   # shown to the drawer and revealed at the end
     alts: tuple[str, ...] = ()  # other spellings / synonyms accepted as correct
     diff: int = 2               # 1 easy, 2 medium, 3 hard
-    cat: str = "custom"
+    cat: str = "other"
 
     def forms(self) -> set[str]:
         return {compact(w) for w in (self.word, *self.alts) if compact(w)}

@@ -14,6 +14,7 @@
       title: "📚 Dizionario", words: "parole", search: "Cerca…", all: "Tutte", add: "＋ Aggiungi", none: "Nessuna parola.",
       denied: "Non puoi modificare il dizionario di questo gruppo.", load: "Caricamento…",
       lvl: ["Facile", "Media", "Difficile"], newWord: "Nuova parola o frase", edit: "Modifica",
+      category: "Categoria", cats: { animals: "Animali e creature", nature: "Natura e ambienti", plants: "Piante", body: "Corpo e abbigliamento", food: "Cibi e bevande", people: "Mestieri e personaggi", places: "Edifici e monumenti", vehicles: "Veicoli", objects: "Oggetti e dispositivi", actions: "Azioni ed emozioni", sport: "Sport e giochi", music: "Musica e strumenti", other: "Altro" },
       word: "Parola o frase", alts: "Sinonimi (separati da virgola)", level: "Difficoltà", auto: "Livello automatico",
       autoHelp: "Il livello si adatta a quanti la indovinano. Se lo cambi a mano resta fisso finché non riattivi l'automatico.",
       save: "Salva", del: "Elimina", sure: "Tocca ancora per eliminare", cancel: "Chiudi",
@@ -35,6 +36,7 @@
       title: "📚 Dictionary", words: "words", search: "Search…", all: "All", add: "＋ Add", none: "No words.",
       denied: "You can't edit this group's dictionary.", load: "Loading…",
       lvl: ["Easy", "Medium", "Hard"], newWord: "New word or phrase", edit: "Edit",
+      category: "Category", cats: { animals: "Animals & creatures", nature: "Nature & places", plants: "Plants", body: "Body & clothing", food: "Food & drinks", people: "Jobs & characters", places: "Buildings & landmarks", vehicles: "Vehicles", objects: "Objects & devices", actions: "Actions & emotions", sport: "Sports & games", music: "Music & instruments", other: "Other" },
       word: "Word or phrase", alts: "Synonyms (comma separated)", level: "Difficulty", auto: "Automatic level",
       autoHelp: "The level follows how many players guess it. If you change it by hand it stays fixed until you turn automatic back on.",
       save: "Save", del: "Delete", sure: "Tap again to delete", cancel: "Close",
@@ -67,7 +69,7 @@
     return s;
   };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const ICON = { objects: "🪑", living: "🐾", actions: "🎭", custom: "✏️" };
+  const ICON = { animals: "🐾", nature: "🏔", plants: "🌿", body: "👕", food: "🍕", people: "👷", places: "🏛", vehicles: "🚗", objects: "🪑", actions: "🎭", sport: "⚽", music: "🎸", other: "✨" };
   const DOT = ["🟢", "🟡", "🔴"];
 
   async function api(path, method, body) {
@@ -154,11 +156,13 @@
 
   function editSheet(w) {
     const isNew = !w;
-    const cur = w || { w: "", alts: [], d: 2, lock: false };
+    const cur = w || { w: "", alts: [], d: 2, lock: false, cat: "other" };
+    const cats = (data && data.cats) || Object.keys(ICON);
     openSheet(`
       <h3>${isNew ? t("newWord") : t("edit")}</h3>
       <label>${t("word")}<input id="fw" type="text" maxlength="40" value="${esc(cur.w)}" autocomplete="off" autocorrect="off" spellcheck="false"></label>
       <label>${t("alts")}<input id="fa" type="text" maxlength="200" value="${esc(cur.alts.join(", "))}" autocomplete="off" autocorrect="off" spellcheck="false"></label>
+      <label>${t("category")}<select id="fc">${cats.map((c) => `<option value="${c}" ${c === (cur.cat || "other") ? "selected" : ""}>${ICON[c] || ""} ${esc(t("cats")[c] || c)}</option>`).join("")}</select></label>
       <div class="dlv">${t("level")}
         ${[1, 2, 3].map((l) => `<button type="button" data-d="${l}" class="${l === cur.d ? "on" : ""}">${DOT[l - 1]} ${t("lvl")[l - 1]}</button>`).join("")}
       </div>
@@ -183,8 +187,9 @@
       const word = document.getElementById("fw").value.trim();
       const alts = document.getElementById("fa").value.split(",").map((x) => x.trim()).filter(Boolean);
       let res;
-      if (isNew) res = await api("dict/add", "POST", { lang: dictLang, text: [word, ...alts].join(" | "), diff });
-      else res = await api("dict/edit", "POST", { lang: dictLang, word: cur.w, new: word, alts, diff,
+      if (isNew) res = await api("dict/add", "POST", { lang: dictLang, text: [word, ...alts].join(" | "), diff,
+        cat: document.getElementById("fc").value });
+      else res = await api("dict/edit", "POST", { lang: dictLang, word: cur.w, new: word, alts, diff, cat: document.getElementById("fc").value,
         lock: !document.getElementById("fauto").checked });
       if (!res.ok) return shake(err(res.error, res));
       closeSheet();

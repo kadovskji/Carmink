@@ -43,7 +43,7 @@ Needs 4+ players, and every player must have opened the bot in private first (th
 | Drawer | Speedrun: up to 50 when the word is guessed at once, falling to 40% of that as the time runs out. Classic: 30 for every player who guessed, with the difficulty multiplier |
 | Hints | Every hint the drawer gives (max 3) cuts 20% of the points of the guesses that follow **and** of the drawer's own points |
 
-The words come from three categories: everyday objects and places, living things (animals, plants, body parts, mythical creatures), actions and emotions. The built-in dictionary is in `data/`; the first time a group plays in a language it is **copied into the group**, which from then on edits it freely (see *Group dictionary* below).
+The words are sorted into categories (animals and creatures, nature and places, plants, body and clothing, food and drinks, jobs and characters, buildings and landmarks, vehicles, objects and devices, actions and emotions, sports and games, music, other); each word shows its category icon and the category can be changed in the dictionary page. The built-in dictionary is in `data/`; the first time a group plays in a language it is **copied into the group**, which from then on edits it freely (see *Group dictionary* below).
 
 Guesses ignore case, accents, spaces and punctuation, and accept the synonyms listed in the dictionary. A guess one typo away gets a "so close!" reply. Messages that contain the answer, written by the drawer or by someone who already guessed, are deleted.
 
@@ -128,9 +128,9 @@ Ports 80 and 443 must be open; the backend listens only on `127.0.0.1:8081`. It 
 
 ## Dictionary
 
-About 450 words per language. The objects and living things come largely from the category names of Google's [Quick, Draw!](https://github.com/googlecreativelab/quickdraw-dataset) dataset (345 things that people could draw in 20 seconds, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), translated and sorted by difficulty; the actions and emotions, and the rest, were added by hand.
+About 1,900 words per language. The objects and living things come largely from the category names of Google's [Quick, Draw!](https://github.com/googlecreativelab/quickdraw-dataset) dataset (345 things that people could draw in 20 seconds, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), translated and sorted by difficulty; the actions and emotions, and the rest, were added by hand.
 
-`data/words_it.json` and `data/words_en.json`: category → difficulty (`"1"` easy, `"2"` medium, `"3"` hard) → list of words. A word can list accepted alternatives after `|` (`"frigorifero|frigo"`). The tests check that there are no duplicates and that every category/difficulty has enough words.
+`data/words_it.json` and `data/words_en.json`: category (`animals`, `nature`, `plants`, `body`, `food`, `people`, `places`, `vehicles`, `objects`, `actions`, `sport`, `music`, `other`) → difficulty (`"1"` easy, `"2"` medium, `"3"` hard) → list of words. A word can list accepted alternatives after `|` (`"frigorifero|frigo"`). The tests check that there are no duplicates and that every main category/difficulty has enough words. The group dictionary holds up to 3,000 words **per language**. When the categories were introduced (database version 2) the dictionaries already copied by groups were reset once, so every group restarts from the new built-in one.
 
 ## Group dictionary
 

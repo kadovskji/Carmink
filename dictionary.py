@@ -33,23 +33,25 @@ class DictMixin:
         lang = self._dict_lang(chat_id, lang)
         rows = self.db.dictionary(chat_id, lang)
         return {"lang": lang, "ui": self.db.get_lang(chat_id), "langs": list(words.LANGUAGES), "words": rows,
-                "total": self.db.count_custom(chat_id), "max": config.CUSTOM_WORDS_MAX,
+                "total": self.db.count_custom(chat_id, lang), "max": config.CUSTOM_WORDS_MAX,
                 "min": config.DICT_MIN_WORDS, "alts_max": config.CUSTOM_ALTS_MAX,
-                "hours": config.DICT_CODE_HOURS}
+                "hours": config.DICT_CODE_HOURS, "cats": list(words.CATEGORIES)}
 
-    async def dict_add(self, chat_id: int, uid: int, lang: str | None, text: str, diff: int) -> None:
+    async def dict_add(self, chat_id: int, uid: int, lang: str | None, text: str, diff: int,
+                       cat: str | None = None) -> None:
         await self.dict_guard(chat_id, uid)
         lang = self._dict_lang(chat_id, lang)
         parsed = words.parse_custom(text if isinstance(text, str) else "")
         if not parsed:
             raise GameError("bad_word")
-        if self.db.count_custom(chat_id) >= config.CUSTOM_WORDS_MAX:
+        if self.db.count_custom(chat_id, lang) >= config.CUSTOM_WORDS_MAX:
             raise GameError("dict_full")
-        if not self.db.add_word(chat_id, lang, parsed[0], diff if diff in (1, 2, 3) else 2, uid, parsed[1]):
+        if not self.db.add_word(chat_id, lang, parsed[0], diff if diff in (1, 2, 3) else 2, uid, parsed[1],
+                                words.cat_of(cat)):
             raise GameError("word_dup")
 
     async def dict_edit(self, chat_id: int, uid: int, lang: str | None, word: str, new: str | None,
-                        alts: list, diff: int | None, lock: bool) -> None:
+                        alts: list, diff: int | None, lock: bool, cat: str | None = None) -> None:
         await self.dict_guard(chat_id, uid)
         lang = self._dict_lang(chat_id, lang)
         main = words.validate_custom(new) if new else None
@@ -64,7 +66,7 @@ class DictMixin:
                 seen.add(words.compact(a))
                 clean.append(a)
         res = self.db.update_word(chat_id, lang, word, main, tuple(clean[:config.CUSTOM_ALTS_MAX]),
-                                  diff if diff in (1, 2, 3) else None, bool(lock))
+                                  diff if diff in (1, 2, 3) else None, bool(lock), cat)
         if res != "ok":
             raise GameError("word_dup" if res == "dup" else "word_missing")
 

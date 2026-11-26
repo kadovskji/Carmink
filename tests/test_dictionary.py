@@ -185,7 +185,7 @@ def row(env, word):
 
 def test_an_own_word_is_kept_if_somebody_guesses_it_with_the_level_from_how_many_did(env):
     own_round(env, solvers=4)                      # 4 of 4 guessers
-    assert row(env, "polpo gigante") == (1, "custom", 1)
+    assert row(env, "polpo gigante") == (1, "other", 1)
 
 
 def test_an_own_word_that_few_guess_is_saved_as_hard(env):
@@ -249,9 +249,9 @@ def test_a_file_round_trips_with_what_the_group_learned(env):
 
 def test_importing_never_touches_what_the_group_already_has(env):
     env.db.add_word(CHAT, "it", "zattera", 3, 1)
-    res = dictio.merge(env.db, CHAT, {"it": [{"w": "Zattera", "alts": [], "d": 1, "c": "custom", "b": 1,
+    res = dictio.merge(env.db, CHAT, {"it": [{"w": "Zattera", "alts": [], "d": 1, "c": "other", "b": 1,
                                               "ea": 0, "eb": 0, "n": 0, "l": False},
-                                             {"w": "barca", "alts": [], "d": 1, "c": "custom", "b": 1,
+                                             {"w": "fantasmagoria", "alts": [], "d": 1, "c": "other", "b": 1,
                                               "ea": 0, "eb": 0, "n": 0, "l": False}]}, 1, dry=False)
     assert res == {"new": 1, "existing": 1, "changed": 1, "full": 0}
     assert row(env, "zattera")[0] == 3
@@ -277,7 +277,7 @@ def test_a_hostile_file_cannot_smuggle_bad_values_in():
                                                        "alts": ["<b>", "fine"]}, {"w": 5}, "str"], "xx": [{"w": "no"}]}})
     items, bad = dictio.parse(raw, "it")
     (it,) = items["it"]
-    assert it["d"] == 3 and it["c"] == "custom" and it["ea"] == 0 and it["eb"] == 0 and it["alts"] == ["fine"] and bad == 3
+    assert it["d"] == 3 and it["c"] == "other" and it["ea"] == 0 and it["eb"] == 0 and it["alts"] == ["fine"] and bad == 3
 
 
 def test_codes_have_the_expected_shape():
@@ -406,7 +406,55 @@ def test_a_database_from_before_the_adaptive_dictionary_is_upgraded(tmp_path):
     db.ensure_dictionary(1, "it")
     assert db.count_custom(1, "it") == len(words.load("it")) + 1
     z = next(w for w in db.dictionary(1, "it") if w["w"] == "zattera")
-    assert z["d"] == 3 and z["alts"] == ["barchetta"] and z["cat"] == "custom" and not z["lock"]
+    assert z["d"] == 3 and z["alts"] == ["barchetta"] and z["cat"] == "other" and not z["lock"]
     for _ in range(6):                                  # `base` was never set: the level is the prior
         db.record_appearance(1, "it", "zattera", 0.0, 1.0)
     assert db.query("SELECT diff FROM custom_words WHERE chat_id = 1 AND word = 'zattera'")[0][0] == 3
+
+
+def test_the_category_can_be_chosen_and_changed(env):
+    env.db.add_word(CHAT, "it", "zattera", 2, 1, (), "vehicles")
+    row = lambda: next(w for w in env.db.dictionary(CHAT, "it") if w["w"] == "zattera")
+    assert row()["cat"] == "vehicles"
+    assert env.db.update_word(CHAT, "it", "zattera", cat="nature") == "ok" and row()["cat"] == "nature"
+    env.db.update_word(CHAT, "it", "zattera", cat="not-a-category")      # unknown: left as it was
+    assert row()["cat"] == "nature"
+    env.db.add_word(CHAT, "it", "boh", 2, 1, (), "custom")               # the old name means "other"
+    assert next(w for w in env.db.dictionary(CHAT, "it") if w["w"] == "boh")["cat"] == "other"
+
+
+def test_the_built_in_words_use_the_new_categories():
+    for lang in words.LANGUAGES:
+        used = {e.cat for e in words.load(lang)}
+        assert used <= set(words.CATEGORIES) and "living" not in used
+        assert {"animals", "nature", "plants", "body", "food", "people", "places", "vehicles", "objects",
+                "actions"} <= used
+
+
+def test_copied_dictionaries_are_reset_once_and_own_words_are_kept(tmp_path):
+    from db import Database
+    p = str(tmp_path / "v1.db")
+    db = Database(p)
+    db.ensure_dictionary(1, "it")                    # copied (and so recorded in dict_ready)
+    db.add_word(2, "it", "zattera", 3, 5)            # a group that never copied: legacy /addword word
+    db.con.execute("PRAGMA user_version = 1"); db.con.commit()
+    db.add_word(1, "it", "mia parola", 2, 5)
+    db = Database(p)                                 # opening it again applies the reset
+    assert db.count_custom(1, "it") == 0 and db.count_custom(2, "it") == 1
+    assert db.query("SELECT COUNT(*) FROM dict_ready")[0][0] == 0
+    db.ensure_dictionary(1, "it")
+    assert db.count_custom(1, "it") == len(words.load("it"))
+    Database(p)                                      # a second opening does not reset again
+    assert db.count_custom(1, "it") == len(words.load("it"))
+
+
+def test_the_word_limit_is_per_language(env, monkeypatch):
+    import config
+    env.engine.words_for(CHAT, "it"); env.engine.words_for(CHAT, "en")
+    monkeypatch.setattr(config, "CUSTOM_WORDS_MAX", len(words.load("it")) + 2)
+    item = lambda w: {"w": w, "alts": [], "d": 1, "c": "other", "b": 1, "ea": 0, "eb": 0, "n": 0, "l": False}
+    res = dictio.merge(env.db, CHAT, {"it": [item("zattera"), item("gommoncino"), item("piroscafo")]}, 1, dry=True)
+    assert res["new"] == 2 and res["full"] == 1          # two more Italian words fit, the third doesn't
+    monkeypatch.setattr(config, "CUSTOM_WORDS_MAX", len(words.load("en")) + 1)
+    env.db.add_word(CHAT, "it", "zattera", 2, 1)         # Italian is over the limit now: English is not affected
+    assert dictio.merge(env.db, CHAT, {"en": [item("raft")]}, 1, dry=True)["new"] == 1

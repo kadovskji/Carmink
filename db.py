@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS custom_words (       -- the group's own dictionary
     diff INTEGER NOT NULL DEFAULT 2,
     added_by INTEGER,
     alts TEXT NOT NULL DEFAULT '',              -- synonyms, separated by |
-    cat TEXT NOT NULL DEFAULT 'custom',         -- objects / living / actions / custom (the icon)
+    cat TEXT NOT NULL DEFAULT 'other',          -- animals / nature / ... / other (see words.CATEGORIES)
     base INTEGER NOT NULL DEFAULT 0,            -- level the statistics started from (0: same as diff)
     ea REAL NOT NULL DEFAULT 0,                 -- adaptive difficulty: weighted ease (see difficulty.py)
     eb REAL NOT NULL DEFAULT 0,                 -- ... and its weight
@@ -80,11 +80,19 @@ class Database:
             self.con.execute("ALTER TABLE chat_settings ADD COLUMN cycles TEXT NOT NULL DEFAULT 'auto'")
         if "alts" not in cols:                  # database created before synonyms existed
             self.con.execute("ALTER TABLE custom_words ADD COLUMN alts TEXT NOT NULL DEFAULT ''")
-        for name, ddl in (("cat", "TEXT NOT NULL DEFAULT 'custom'"), ("base", "INTEGER NOT NULL DEFAULT 0"),
+        for name, ddl in (("cat", "TEXT NOT NULL DEFAULT 'other'"), ("base", "INTEGER NOT NULL DEFAULT 0"),
                           ("ea", "REAL NOT NULL DEFAULT 0"), ("eb", "REAL NOT NULL DEFAULT 0"),
                           ("shown", "INTEGER NOT NULL DEFAULT 0"), ("locked", "INTEGER NOT NULL DEFAULT 0")):
             if name not in cols:                # database created before the adaptive dictionary
                 self.con.execute(f"ALTER TABLE custom_words ADD COLUMN {name} {ddl}")
+        self.con.execute("UPDATE custom_words SET cat = 'other' WHERE cat = 'custom'")
+        if self.con.execute("PRAGMA user_version").fetchone()[0] < 2:
+            # the built-in dictionary was rebuilt with new categories: groups restart from the new one
+            self.con.execute("DELETE FROM custom_words WHERE EXISTS (SELECT 1 FROM dict_ready r "
+                             "WHERE r.chat_id = custom_words.chat_id AND r.lang = custom_words.lang)")
+            self.con.execute("DELETE FROM dict_ready")
+            self.con.execute("DELETE FROM dict_codes")
+            self.con.execute("PRAGMA user_version = 2")
         self.con.commit()
 
     def query(self, sql: str, params: tuple = ()) -> list[tuple]:
@@ -184,7 +192,7 @@ class Database:
     @staticmethod
     def _entry(row) -> words.Entry:
         w, d, alts, cat = row[:4]
-        return words.Entry(word=w, alts=tuple(a for a in alts.split("|") if a), diff=d, cat=cat or "custom")
+        return words.Entry(word=w, alts=tuple(a for a in alts.split("|") if a), diff=d, cat=words.cat_of(cat))
 
     def custom_entries(self, chat_id: int, lang: str) -> list[words.Entry]:
         return [self._entry(r) for r in self.query(
@@ -196,7 +204,7 @@ class Database:
         for w, d, alts, cat, base, ea, eb, shown, locked in self.query(
                 f"SELECT {self._COLS} FROM custom_words WHERE chat_id = ? AND lang = ? "
                 "ORDER BY word COLLATE NOCASE", (chat_id, lang)):
-            out.append({"w": w, "alts": [a for a in alts.split("|") if a], "d": d, "cat": cat or "custom",
+            out.append({"w": w, "alts": [a for a in alts.split("|") if a], "d": d, "cat": words.cat_of(cat),
                         "n": shown, "lock": bool(locked)})
         return out
 
@@ -215,14 +223,14 @@ class Database:
         return None
 
     def add_word(self, chat_id: int, lang: str, word: str, diff: int, user_id: int,
-                 alts: tuple[str, ...] = (), cat: str = "custom", stats: tuple[float, float, int] = (0, 0, 0),
+                 alts: tuple[str, ...] = (), cat: str = "other", stats: tuple[float, float, int] = (0, 0, 0),
                  locked: bool = False, base: int | None = None) -> bool:
         """False if the group already has this word (same letters, ignoring case and accents)."""
         if self._find(chat_id, lang, word):
             return False
         self.con.execute("INSERT INTO custom_words (chat_id, lang, word, diff, added_by, alts, cat, base, "
                          "ea, eb, shown, locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                         (chat_id, lang, word, diff, user_id, "|".join(alts), cat, base or diff, *stats, int(locked)))
+                         (chat_id, lang, word, diff, user_id, "|".join(alts), words.cat_of(cat), base or diff, *stats, int(locked)))
         self.con.commit()
         return True
 
@@ -237,7 +245,7 @@ class Database:
 
     def update_word(self, chat_id: int, lang: str, word: str, new_word: str | None = None,
                     alts: tuple[str, ...] | None = None, diff: int | None = None,
-                    locked: bool | None = None) -> str:
+                    locked: bool | None = None, cat: str | None = None) -> str:
         """'ok' | 'missing' | 'dup' (the new spelling is another word). A level changed by hand restarts the
         statistics from that level; `locked` says whether it then stays fixed."""
         w = self._find(chat_id, lang, word)
@@ -254,6 +262,9 @@ class Database:
         new_alts = "|".join(alts) if alts is not None else a
         new_diff = diff if diff in (1, 2, 3) else d
         new_lock = int(locked) if locked is not None else lk
+        if cat in words.CATEGORY_ICON:
+            self.con.execute("UPDATE custom_words SET cat = ? WHERE chat_id = ? AND lang = ? AND word = ?",
+                             (cat, chat_id, lang, w))
         if new_diff != d:
             self.con.execute("UPDATE custom_words SET ea = 0, eb = 0, shown = 0, base = ? "
                              "WHERE chat_id = ? AND lang = ? AND word = ?", (new_diff, chat_id, lang, w))
@@ -264,11 +275,11 @@ class Database:
         return "ok"
 
     def overwrite_word(self, chat_id: int, lang: str, word: str, alts: tuple[str, ...], diff: int, base: int,
-                       stats: tuple[float, float, int], locked: bool) -> None:
+                       stats: tuple[float, float, int], locked: bool, cat: str = "other") -> None:
         """Replace what the group knows about a word (import with "update existing")."""
         self.con.execute("UPDATE custom_words SET alts = ?, diff = ?, base = ?, ea = ?, eb = ?, shown = ?, "
-                         "locked = ? WHERE chat_id = ? AND lang = ? AND word = ?",
-                         ("|".join(alts), diff, base, *stats, int(locked), chat_id, lang, word))
+                         "locked = ?, cat = ? WHERE chat_id = ? AND lang = ? AND word = ?",
+                         ("|".join(alts), diff, base, *stats, int(locked), words.cat_of(cat), chat_id, lang, word))
         self.con.commit()
 
     def word_data(self, chat_id: int, lang: str, word: str) -> tuple | None:
@@ -300,7 +311,7 @@ class Database:
                 "SELECT lang, word, diff, alts, cat, base, ea, eb, shown, locked FROM custom_words "
                 "WHERE chat_id = ? ORDER BY lang, word COLLATE NOCASE", (chat_id,)):
             out.setdefault(lang, []).append({
-                "w": w, "alts": [a for a in alts.split("|") if a], "d": d, "c": cat or "custom",
+                "w": w, "alts": [a for a in alts.split("|") if a], "d": d, "c": words.cat_of(cat),
                 "b": base or d, "ea": round(ea, 4), "eb": round(eb, 4), "n": shown, "l": locked})
         return out
 

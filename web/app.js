@@ -109,7 +109,7 @@
     if (typeof s === "string" && vars) for (const k in vars) s = s.replace("{" + k + "}", vars[k]);
     return s;
   };
-  const ICON = { objects: "🪑", living: "🐾", actions: "🎭", custom: "✏️" };
+  const ICON = { animals: "🐾", nature: "🏔", plants: "🌿", body: "👕", food: "🍕", people: "👷", places: "🏛", vehicles: "🚗", objects: "🪑", actions: "🎭", sport: "⚽", music: "🎸", other: "✨" };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // ------------------------------------------------------------------ server state

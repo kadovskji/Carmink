@@ -12,7 +12,6 @@ from db import Database
 
 FORMAT = 1
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"      # no 0/O, 1/I/L
-CATS = (*words.CATEGORIES, "custom")
 
 
 def dump(rows: dict[str, list[dict]]) -> str:
@@ -40,7 +39,7 @@ def _item(raw: dict) -> dict | None:
             alts.append(a)
     d = int(_num(raw.get("d"), 1, 3, 2))
     return {"w": word, "alts": alts[:config.CUSTOM_ALTS_MAX], "d": d,
-            "c": raw.get("c") if raw.get("c") in CATS else "custom",
+            "c": "other" if raw.get("c") == "custom" else words.cat_of(raw.get("c")),
             "b": int(_num(raw.get("b"), 1, 3, d)), "ea": _num(raw.get("ea"), 0, 100),
             "eb": _num(raw.get("eb"), 0, 100), "n": int(_num(raw.get("n"), 0, 100000)),
             "l": bool(raw.get("l"))}
@@ -82,7 +81,7 @@ def parse(text: str, lang: str) -> tuple[dict[str, list[dict]], int]:
         if not parsed:
             bad += 1
             continue
-        out.setdefault(lang, []).append({"w": parsed[0], "alts": list(parsed[1]), "d": diff, "c": "custom",
+        out.setdefault(lang, []).append({"w": parsed[0], "alts": list(parsed[1]), "d": diff, "c": "other",
                                          "b": diff, "ea": 0.0, "eb": 0.0, "n": 0, "l": False})
     return out, bad
 
@@ -99,8 +98,8 @@ def merge(db: Database, chat_id: int, items: dict[str, list[dict]], user_id: int
     for lang in items:
         db.ensure_dictionary(chat_id, lang)       # the built-in words first: what the file brings is on top
     res = {"new": 0, "existing": 0, "changed": 0, "full": 0}
-    total = db.count_custom(chat_id)
     for lang, rows in items.items():
+        total = db.count_custom(chat_id, lang)
         have = {words.compact(e.word): e.word for e in db.custom_entries(chat_id, lang)}
         for it in rows:
             key = words.compact(it["w"])
@@ -113,7 +112,7 @@ def merge(db: Database, chat_id: int, items: dict[str, list[dict]], user_id: int
                     res["changed"] += 1
                     if update and not dry:
                         db.overwrite_word(chat_id, lang, stored, tuple(it["alts"]), it["d"], it["b"],
-                                          (it["ea"], it["eb"], it["n"]), it["l"])
+                                          (it["ea"], it["eb"], it["n"]), it["l"], it["c"])
             elif total >= config.CUSTOM_WORDS_MAX:
                 res["full"] += 1
             else:

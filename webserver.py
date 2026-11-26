@@ -184,10 +184,10 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
             return JSONResponse({"error": "bad_request"}, status_code=400)
         action, lang = request.path_params["action"], b.get("lang")
         if action == "add":
-            await engine.dict_add(chat_id, uid, lang, b.get("text"), b.get("diff"))
+            await engine.dict_add(chat_id, uid, lang, b.get("text"), b.get("diff"), b.get("cat"))
         elif action == "edit":
             await engine.dict_edit(chat_id, uid, lang, str(b.get("word", "")), b.get("new"),
-                                   b.get("alts") or [], b.get("diff"), bool(b.get("lock")))
+                                   b.get("alts") or [], b.get("diff"), bool(b.get("lock")), b.get("cat"))
         elif action == "delete":
             await engine.dict_delete(chat_id, uid, lang, str(b.get("word", "")))
         elif action == "export":
