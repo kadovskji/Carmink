@@ -183,3 +183,42 @@ def test_broken_canva_drawing_endpoints(env, client, monkeypatch):
     assert client.post("/api/bk/submit", content=JPEG).status_code == 401
     big = b"\xff\xd8\xff" + b"0" * (config.BROKEN_JPEG_MAX + 10)
     assert client.post("/api/bk/draft", content=big, headers=hdr(user_id=2)).status_code == 413
+
+
+def test_broken_canva_text_through_the_mini_app(env, client):
+    for uid in range(1, 5):
+        env.db.add_dm(uid)
+    env.db.set_setting(env.CHAT, "cycles", "2")
+    g = env.start_match(4, "it", "broken")
+    st = client.get("/api/state", headers=hdr()).json()
+    assert st["bk"]["kind"] == "text" and st["bk"]["active"] and not st["bk"]["done"]
+    assert client.post("/api/bk/text", json={"text": "  un   gatto\nrosso "}, headers=hdr()).status_code == 200
+    assert g.broken.inbox[1]["text"] == "un gatto rosso"
+    assert client.get("/api/state", headers=hdr()).json()["bk"]["done"]
+    big = "x" * (config.BROKEN_TEXT_MAX + 1)
+    r = client.post("/api/bk/text", json={"text": big}, headers=hdr(user_id=2))
+    assert r.status_code == 409 and r.json()["error"] == "too_long"
+    assert client.post("/api/bk/text", json={"text": "ok"}, headers=hdr(user_id=77)).json()["error"] == "not_player"
+    for uid in (2, 3, 4):
+        client.post("/api/bk/text", json={"text": f"frase {uid}"}, headers=hdr(user_id=uid))
+    assert g.phase == Phase.STEP and g.broken.kind == "draw"
+    assert client.post("/api/bk/text", json={"text": "x"}, headers=hdr()).json()["error"] == "wrong_phase"
+    for uid in range(1, 5):
+        client.post("/api/bk/submit", content=JPEG, headers=hdr(user_id=uid))
+    # the describe step: the drawing is served to the player, who answers through the app
+    st = client.get("/api/state", headers=hdr()).json()
+    assert st["bk"]["kind"] == "text" and st["bk"]["image"]
+    r = client.get("/api/bk/given", headers=hdr())
+    assert r.status_code == 200 and r.content == JPEG
+    assert client.post("/api/bk/text", json={"text": "una macchia"}, headers=hdr()).status_code == 200
+
+
+def test_speedrun_guess_through_the_mini_app(env, client):
+    g = env.start_match(3, mode="speedrun")
+    t = env.to_drawing()
+    a = next(u for u in g.players if u != t.drawer)
+    r = client.post("/api/guess", json={"text": "qzxqzx"}, headers=hdr(user_id=a))
+    assert r.status_code == 200 and r.json()["result"] == "wrong"
+    env.run(env.io.advance(config.GUESS_MIN_INTERVAL + 1))
+    r = client.post("/api/guess", json={"text": t.word.word}, headers=hdr(user_id=a))
+    assert r.json()["result"] == "right" and r.json()["pts"] > 0

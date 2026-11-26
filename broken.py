@@ -127,13 +127,14 @@ class BrokenMixin:
                 await self._dm(g, u, T(g.lang, "bk_aborted"))
             self._close(g)
             return await self._say(g.chat_id, g.lang, "bk_aborted")
-        g.broken = BrokenState(order=order, steps=broken_steps(len(order)))
+        g.broken = BrokenState(order=order, steps=broken_steps(len(order), g.cycles))
         g.scores = {u: 0 for u in order}
         g.go(Phase.WRITING, config.BROKEN_PHRASE_SECONDS, self.io.now())
         self._timer(g, "bk", config.BROKEN_PHRASE_SECONDS, self._bk_timeout)
         LOG.info("broken game in %s starts: %d players, %d passes", g.chat_id, len(order),
                  g.broken.steps)
         await self._bk_post_status(g)
+        await self._tnotify(g)
 
     # ================================================================ private messages
     async def on_private(self, uid: int, text: str) -> bool:
@@ -154,11 +155,39 @@ class BrokenMixin:
             await self._dm(g, uid, T(g.lang, "bk_too_long", max=config.BROKEN_TEXT_MAX))
             return True
         again = uid in bk.inbox
-        bk.inbox[uid] = {"kind": "text", "author": uid, "name": g.name(uid), "text": phrase}
         await self._dm(g, uid, T(g.lang, "bk_replaced" if again else "bk_saved"))
+        await self._bk_store_text(g, uid, phrase)
+        return True
+
+    async def _bk_store_text(self, g: Game, uid: int, phrase: str) -> None:
+        g.broken.inbox[uid] = {"kind": "text", "author": uid, "name": g.name(uid), "text": phrase}
         await self._bk_update_status(g)
         await self._bk_check_done(g)
-        return True
+
+    async def bk_text(self, chat_id: int, uid: int, text: str) -> None:
+        """A phrase or a description typed in the Mini App (the same as writing to the bot)."""
+        g = self.games.get(chat_id)
+        if not g or g.mode != "broken" or not g.broken:
+            raise GameError("no_game")
+        bk = g.broken
+        if g.phase not in (Phase.WRITING, Phase.STEP) or bk.kind != "text":
+            raise GameError("wrong_phase")
+        if uid not in bk.order or uid not in g.players:
+            raise GameError("not_player")
+        phrase = clean_phrase(text)
+        if not phrase:
+            raise GameError("bad_request")
+        if len(phrase) > config.BROKEN_TEXT_MAX:
+            raise GameError("too_long", max=config.BROKEN_TEXT_MAX)
+        await self._bk_store_text(g, uid, phrase)
+
+    def bk_given(self, chat_id: int, uid: int) -> bytes | None:
+        """The drawing this player has to describe now."""
+        g = self.games.get(chat_id)
+        if not g or g.mode != "broken" or not g.broken or g.phase != Phase.STEP:
+            return None
+        item = g.broken.given.get(uid)
+        return (item.get("jpeg") or gifmaker.BLANK_JPEG) if item and item.get("kind") == "draw" else None
 
     # ================================================================ drawings (Mini App)
     def _bk_draw_ctx(self, chat_id: int, uid: int) -> tuple[Game, BrokenState]:
@@ -203,9 +232,11 @@ class BrokenMixin:
             return out
         mine = uid in bk.order and uid in g.players
         info = {"step": bk.step, "steps": bk.steps, "kind": bk.kind, "active": mine,
-                "done": uid in bk.inbox}
+                "done": uid in bk.inbox, "max": config.BROKEN_TEXT_MAX}
         if mine and g.phase == Phase.STEP and bk.kind == "draw" and uid in bk.given:
             info["prompt"] = bk.given[uid].get("text", "")
+        if mine and g.phase == Phase.STEP and bk.kind == "text" and uid in bk.given:
+            info["image"] = True                # a drawing to describe: /api/bk/given
         out.update(turn=bk.step, turns=bk.steps, bk=info)
         return out
 
@@ -239,7 +270,7 @@ class BrokenMixin:
                 self._close(g)
                 return await self._say(g.chat_id, g.lang, "bk_aborted")
             bk.order = keep
-            bk.steps = broken_steps(len(keep))
+            bk.steps = broken_steps(len(keep), g.cycles)
             bk.chains = [[bk.inbox[u]] for u in keep]
         else:
             for p, u in enumerate(bk.order):
@@ -267,6 +298,7 @@ class BrokenMixin:
             jobs.append(self._bk_deliver(g, u, src, secs))
         await asyncio.gather(*jobs)
         await self._bk_post_status(g)
+        await self._tnotify(g)
         await self._bk_check_done(g)
 
     async def _bk_deliver(self, g: Game, uid: int, src: dict, secs: int) -> None:

@@ -84,6 +84,7 @@ class Engine(BrokenMixin):
         self.rng = rng or random.Random()
         self.games: dict[int, Game] = {}
         self.user_game: dict[int, int] = {}
+        self.test_notify = None        # async callback(game): test matches tell the admin panel the phase changed
 
     # ================================================================ helpers
     def link(self, chat_id: int, compact: bool = False) -> str:
@@ -92,6 +93,10 @@ class Engine(BrokenMixin):
         url = (f"https://t.me/{config.BOT_USERNAME}/{config.MINIAPP_SHORTNAME}"
                f"?startapp={param}")
         return url + "&mode=compact" if compact else url
+
+    async def _tnotify(self, g: Game) -> None:
+        if g.test and self.test_notify:
+            await self.test_notify(g)
 
     async def _del(self, g: Game, chat_id: int, message_id: int) -> None:
         if not g.test and message_id:           # test messages come from /t: nothing to delete
@@ -106,10 +111,12 @@ class Engine(BrokenMixin):
         base = TEST_BASE + (admin % 10**7) * 100
         ids = [base + i for i in range(1, n + 1)]
         names = {u: f"Test {i}" for i, u in enumerate(ids, 1)}
-        chosen = self.db.get_settings(admin)["drawtime"]
+        st = self.db.get_settings(admin)
+        chosen = st["drawtime"]
         g = Game(chat_id=admin, lang=lang, creator=ids[0], mode=mode, players=dict(names),
                  names=dict(names), lobby_end=self.io.now(), test=True, test_ids=ids,
-                 draw_seconds=config.DRAW_DEFAULTS[mode] if chosen == "auto" else int(chosen))
+                 draw_seconds=config.DRAW_DEFAULTS[mode] if chosen == "auto" else int(chosen),
+                 cycles=None if st["cycles"] == "auto" else int(st["cycles"]))
         self.games[admin] = g
         for u in ids:
             self.user_game[u] = admin
@@ -198,10 +205,12 @@ class Engine(BrokenMixin):
             return
         if mode == "broken" and not self.db.has_dm(uid):
             return await self._need_dm(chat_id, lang)
-        chosen = self.db.get_settings(chat_id)["drawtime"]
+        st = self.db.get_settings(chat_id)
+        chosen = st["drawtime"]
         g = Game(chat_id=chat_id, lang=lang, creator=uid, mode=mode, players={uid: name},
                  names={uid: name}, lobby_end=self.io.now() + config.LOBBY_SECONDS,
-                 draw_seconds=config.DRAW_DEFAULTS[mode] if chosen == "auto" else int(chosen))
+                 draw_seconds=config.DRAW_DEFAULTS[mode] if chosen == "auto" else int(chosen),
+                 cycles=None if st["cycles"] == "auto" else int(st["cycles"]))
         self.games[chat_id] = g
         self.user_game[uid] = chat_id
         self._timer(g, "lobby", config.LOBBY_SECONDS, self._lobby_expired)
@@ -369,6 +378,7 @@ class Engine(BrokenMixin):
             return await self._next_turn(g, "")
         g.go(Phase.CHOOSING, config.CHOOSE_SECONDS, self.io.now())
         self._timer(g, "choose", config.CHOOSE_SECONDS, self._choice_timeout)
+        await self._tnotify(g)
 
     async def _choice_timeout(self, g: Game) -> None:
         await self._skip(g, "skip_no_choice", g.players.get(g.turn.drawer, "?"))
@@ -505,7 +515,7 @@ class Engine(BrokenMixin):
         g = self.games.get(chat_id)
         if not g or not g.turn:
             raise GameError("no_game")
-        if g.mode != "classic":
+        if g.mode not in ("classic", "speedrun"):
             raise GameError("wrong_mode")
         t = g.turn
         if g.phase != Phase.DRAWING:
@@ -525,6 +535,8 @@ class Engine(BrokenMixin):
         t.last_attempt[uid] = now
         attempt_id = len(t.attempts)
         name = g.players[uid]
+        if g.mode == "speedrun":
+            return await self._speedrun_web_guess(g, uid, name, text)
         if words.is_correct(t.word, text):
             pts = self._award(g, uid)
             t.attempts.append({"u": name, "t": None, "r": True})     # the word itself is never shown
@@ -536,6 +548,19 @@ class Engine(BrokenMixin):
         shown = "🙈" if words.contains_answer(t.word, text) else text    # a sentence with the answer in it
         t.attempts.append({"u": name, "t": shown, "r": False})
         return {"result": "close" if words.is_close(t.word, text) else "wrong", "id": attempt_id}
+
+    async def _speedrun_web_guess(self, g: Game, uid: int, name: str, text: str) -> dict:
+        """Speedrun guess typed in the Mini App: the same as writing it in the chat. A wrong one is
+        echoed in the chat, so the others still see what is being tried."""
+        t = g.turn
+        if words.is_correct(t.word, text):
+            before = g.scores.get(uid, 0)
+            await self.on_message(g.chat_id, uid, text, 0)
+            return {"result": "right", "pts": g.scores.get(uid, 0) - before, "id": 0}
+        if not words.contains_answer(t.word, text):
+            await self.io.send(g.chat_id, f"💬 <b>{esc(name)}</b>: {esc(text)}")
+        await self.on_message(g.chat_id, uid, text, 0)           # the "so close" notice
+        return {"result": "close" if words.is_close(t.word, text) else "wrong", "id": 0}
 
     def post_events(self, chat_id: int, uid: int, frm, events) -> int:
         """The drawer streams its strokes; `frm` is the index of the first event of the batch,
@@ -643,6 +668,7 @@ class Engine(BrokenMixin):
               icon=words.CATEGORY_ICON.get(t.word.cat, "")),
             [(T(g.lang, "btn_play" if classic else "btn_watch"),
               self.link(g.chat_id, compact=not classic))])
+        await self._tnotify(g)
 
     async def final_snapshot(self, chat_id: int, uid: int, data: bytes) -> None:
         """The finished canvas, sent by the drawer once the round is over."""

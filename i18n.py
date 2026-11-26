@@ -318,6 +318,18 @@ STRINGS.update({
     "settings_sub_drawtime": {
         "it": "Quanto dura ogni disegno, per le partite che iniziano da ora. Auto: 2 minuti in Speedrun e Classica, 3 in Broken Canva.",
         "en": "How long each drawing lasts, for matches started from now on. Auto: 2 minutes in Speedrun and Classic, 3 in Broken Canva."},
+    "set_cycles": {"it": "Cicli Broken Canva", "en": "Broken Canva cycles"},
+    "set_cycles_auto": {"it": "Auto (uno per giocatore, max 5)", "en": "Auto (one per player, max 5)"},
+    "set_cycles_1": {"it": "1 ciclo", "en": "1 cycle"},
+    "set_cycles_2": {"it": "2 cicli", "en": "2 cycles"},
+    "set_cycles_3": {"it": "3 cicli", "en": "3 cycles"},
+    "set_cycles_4": {"it": "4 cicli", "en": "4 cycles"},
+    "set_cycles_5": {"it": "5 cicli", "en": "5 cycles"},
+    "settings_sub_cycles": {
+        "it": "Quanti cicli dura una partita di Broken Canva (un ciclo = una frase o descrizione e il suo disegno), per le partite che iniziano da ora. "
+              "Auto: un ciclo per giocatore, al massimo 5.",
+        "en": "How many cycles a Broken Canva match lasts (a cycle = a phrase or description and its drawing), for matches started from now on. "
+              "Auto: one cycle per player, at most 5."},
     "btn_make_admin": {"it": "👑 Rendimi amministratore", "en": "👑 Make me an admin"},
     "welcome_group": {
         "it": "🎨 Ciao! Sono <b>Carmink</b>: si disegna, gli altri indovinano. Scrivete /newgame per iniziare, /help per le regole.\n\n"

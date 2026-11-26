@@ -23,9 +23,11 @@ def jpeg(color="white") -> bytes:
     return b.getvalue()
 
 
-def start_broken(env: Env, n: int = 4, lang: str = "it"):
+def start_broken(env: Env, n: int = 4, lang: str = "it", cycles: int | str = 2):
+    """Most tests use 2 cycles (3 passes); the default is one cycle per player."""
     for uid in range(1, n + 1):
         env.db.add_dm(uid)
+    env.db.set_setting(env.CHAT, "cycles", str(cycles))
     return env.start_match(n, lang, "broken")
 
 
@@ -50,9 +52,28 @@ def play_to_the_end(env: Env):
 
 
 # ---------------------------------------------------------------- rules
-@pytest.mark.parametrize("n,steps", [(4, 3), (5, 3), (6, 5), (7, 5), (8, 7), (12, 7)])
-def test_the_chain_always_ends_with_a_drawing_and_has_at_most_7_passes(n, steps):
-    assert broken_steps(n) == steps and steps % 2 == 1 and steps <= 7
+@pytest.mark.parametrize("n,steps", [(4, 7), (5, 9), (6, 9), (12, 9)])
+def test_default_is_one_cycle_per_player_at_most_5(n, steps):
+    assert broken_steps(n) == steps and steps % 2 == 1
+
+
+@pytest.mark.parametrize("cycles,steps", [(1, 1), (2, 3), (3, 5), (5, 9)])
+def test_a_cycle_is_a_description_and_its_drawing(cycles, steps):
+    assert broken_steps(6, cycles) == steps          # the phrase counts as the first description
+
+
+def test_cycles_setting_changes_the_length_of_the_match(env):
+    g = start_broken(env, 5, cycles=3)
+    write_all(env)
+    assert g.broken.steps == 5
+    g2 = Env()
+    for u in range(1, 5):
+        g2.db.add_dm(u)
+    g2.start_match(4, "it", "broken")                 # auto: one per player
+    assert g2.game.cycles is None
+    write_all(g2)
+    assert g2.game.broken.steps == 7
+    assert not env.db.set_setting(env.CHAT, "cycles", "6") and env.db.set_setting(env.CHAT, "cycles", "5")
 
 
 # ---------------------------------------------------------------- sign-up
@@ -179,7 +200,7 @@ def test_passes_alternate_and_end_with_a_drawing(env):
     assert len(env.io.animations) == 4
     for a in env.io.animations:
         im = Image.open(io.BytesIO(a["data"]))
-        assert a["data"][:6] == b"GIF89a" and im.n_frames == 4      # phrase, drawing, text, drawing
+        assert a["data"][:6] == b"GIF89a" and im.n_frames == 2      # (phrase + drawing), (description + drawing)
 
 
 def test_the_dms_follow_the_pass(env):
@@ -348,4 +369,4 @@ def test_gif_of_a_chain_with_long_text_and_wide_characters():
     data = gifmaker.make_gif(items, {"start": "Phrase by {name}", "draw": "Drawing by {name}",
                                      "describe": "{name} wrote"})
     im = Image.open(io.BytesIO(data))
-    assert im.n_frames == 4 and im.size == gifmaker.SIZE
+    assert im.n_frames == 2 and im.size == gifmaker.SIZE      # one frame per phrase + drawing pair

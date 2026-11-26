@@ -9,6 +9,7 @@ import html
 import io
 import json
 import logging
+import math
 import os
 import random
 import sys
@@ -31,6 +32,9 @@ class Admin:
         self.db, self.engine = db, engine
         # user_id -> {"step": "en" | "it" | "confirm", "en": str, "it": str}
         self.pending: dict[int, dict] = {}
+        self._drawn: dict[bytes, str] = {}          # drawings we made for the tests -> what they show
+        self._bot = None
+        engine.test_notify = self._push_panel
 
     @staticmethod
     def is_bot_admin(uid: int) -> bool:
@@ -59,27 +63,77 @@ class Admin:
         await update.message.reply_text(text, reply_markup=kb)
 
     # ---------------------------------------------------------------- test match: control panel
-    SHAPES = ("triangolo", "cerchio", "quadrato", "stella", "rombo", "cuore", "croce")
-    COLORS = ("giallo", "rosso", "arancione", "blu", "verde", "viola", "rosa")
+    # simple shape + colour phrases for Broken Canva tests: "cerchio rosso", "stella gialla"
+    SHAPES = (("triangolo", "m"), ("cerchio", "m"), ("quadrato", "m"), ("rettangolo", "m"),
+              ("rombo", "m"), ("cuore", "m"), ("stella", "f"), ("croce", "f"))
+    COLORS = (("rosso", "rossa", (220, 30, 40)), ("giallo", "gialla", (250, 220, 20)),
+              ("verde", "verde", (40, 170, 70)), ("rosa", "rosa", (250, 150, 190)),
+              ("blu", "blu", (50, 70, 210)), ("arancione", "arancione", (250, 130, 30)),
+              ("viola", "viola", (150, 60, 170)), ("azzurro", "azzurra", (60, 170, 230)),
+              ("marrone", "marrone", (130, 85, 50)), ("nero", "nera", (20, 20, 20)))
 
-    def _phrase(self) -> str:
-        """A short made-up phrase for Broken Canva: three shapes or three colours."""
-        return ", ".join(random.sample(random.choice((self.SHAPES, self.COLORS)), 3))
+    def _phrase(self) -> tuple[str, str]:
+        """A made-up phrase: a simple shape with a colour, e.g. 'cerchio rosso'."""
+        shape, gender = random.choice(self.SHAPES)
+        masc, fem, _ = random.choice(self.COLORS)
+        return f"{shape} {masc if gender == 'm' else fem}"
 
-    @staticmethod
-    def _quick_drawing() -> bytes:
-        """A small random drawing (coloured shapes) for Broken Canva tests."""
+    def _parse(self, phrase: str):
+        """(shape, rgb) of a phrase made by _phrase, or random ones for any other text."""
+        words_ = phrase.lower().split()
+        shape = next((w for w in words_ if w in {x for x, _ in self.SHAPES}), None) \
+            or random.choice(self.SHAPES)[0]
+        rgb = next((c[2] for c in self.COLORS if any(w in (c[0], c[1]) for w in words_)), None) \
+            or random.choice(self.COLORS)[2]
+        return shape, rgb
+
+    def _quick_drawing(self, prompt: str = "") -> bytes:
+        """A drawing of the prompt ('cerchio rosso'): the shape, filled with the colour."""
         from PIL import Image, ImageDraw
+        shape, rgb = self._parse(prompt)
         img = Image.new("RGB", (400, 300), "white")
         d = ImageDraw.Draw(img)
-        for _ in range(random.randint(2, 4)):
-            x, y = random.randint(20, 280), random.randint(20, 200)
-            w, h = random.randint(40, 110), random.randint(40, 90)
-            col = tuple(random.randint(0, 255) for _ in range(3))
-            random.choice((d.ellipse, d.rectangle))((x, y, x + w, y + h), fill=col, outline="black", width=3)
+        cx, cy, r = 200, 150, 100
+        kw = {"fill": rgb, "outline": "black", "width": 4}
+        if shape == "cerchio":
+            d.ellipse((cx - r, cy - r, cx + r, cy + r), **kw)
+        elif shape == "quadrato":
+            d.rectangle((cx - r + 15, cy - r + 15, cx + r - 15, cy + r - 15), **kw)
+        elif shape == "rettangolo":
+            d.rectangle((cx - 150, cy - 80, cx + 150, cy + 80), **kw)
+        elif shape == "triangolo":
+            d.polygon([(cx, cy - r), (cx + r + 10, cy + r - 20), (cx - r - 10, cy + r - 20)], **kw)
+        elif shape == "rombo":
+            d.polygon([(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)], **kw)
+        elif shape == "cuore":
+            d.ellipse((cx - 95, cy - 90, cx + 5, cy + 10), **kw)
+            d.ellipse((cx - 5, cy - 90, cx + 95, cy + 10), **kw)
+            d.polygon([(cx - 92, cy - 20), (cx + 92, cy - 20), (cx, cy + 105)], fill=rgb)
+        elif shape == "stella":
+            pts = []
+            for i in range(10):
+                ang = -math.pi / 2 + i * math.pi / 5
+                rad = r if i % 2 == 0 else r * 0.42
+                pts.append((cx + rad * math.cos(ang), cy + rad * math.sin(ang)))
+            d.polygon(pts, **kw)
+        else:                                           # croce
+            d.polygon([(cx - 30, cy - r), (cx + 30, cy - r), (cx + 30, cy - 30), (cx + r, cy - 30),
+                       (cx + r, cy + 30), (cx + 30, cy + 30), (cx + 30, cy + r), (cx - 30, cy + r),
+                       (cx - 30, cy + 30), (cx - r, cy + 30), (cx - r, cy - 30), (cx - 30, cy - 30)], **kw)
         out = io.BytesIO()
         img.save(out, "JPEG", quality=80)
         return out.getvalue()
+
+    def _text_for(self, g, uid: int) -> str:
+        """What a fake player writes now: a new phrase, or a description of the drawing received
+        (the shape and colour it was drawn from, when we drew it ourselves)."""
+        bk = g.broken
+        item = bk.given.get(uid) if bk else None
+        if item and item.get("kind") == "draw":
+            known = self._drawn.get(item.get("jpeg"))
+            if known:
+                return known
+        return self._phrase()
 
     def _test_panel(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
         """Buttons to play the fake players of the running test match."""
@@ -144,21 +198,40 @@ class Admin:
             elif act in ("w", "r") and g.turn:
                 word = g.turn.word.word if act == "r" else f"qzx{random.randint(100, 999)}"
                 return await self.engine.act_as(uid, n, word) or "ok"
-            elif act == "p":
-                return await self.engine.act_as(uid, n, self._phrase()) or "ok"
+            elif act == "p" and g.broken:
+                u = g.test_ids[n - 1]
+                return await self.engine.act_as(uid, n, self._text_for(g, u)) or "ok"
             elif act == "pall" and g.broken:
                 for k, u in enumerate(g.test_ids, 1):
                     if u in g.broken.order and u not in g.broken.inbox and self.engine.games.get(uid) is g:
-                        await self.engine.act_as(uid, k, self._phrase())
+                        await self.engine.act_as(uid, k, self._text_for(g, u))
             elif act in ("d", "dall") and g.broken and g.broken.kind == "draw":
                 for k, u in enumerate(g.test_ids, 1):
                     if (act == "d" and k != n) or u not in g.broken.order or u in g.broken.inbox:
                         continue
                     if self.engine.games.get(uid) is g and g.phase == Phase.STEP:
-                        await self.engine.bk_submit(uid, u, self._quick_drawing())
+                        prompt = (g.broken.given.get(u) or {}).get("text") or self._phrase()
+                        jpeg = self._quick_drawing(prompt)
+                        self._drawn[self._normalised(jpeg)] = prompt
+                        await self.engine.bk_submit(uid, u, jpeg)
         except GameError as e:
             return f"Errore: {e.code}"
         return "ok"
+
+    @staticmethod
+    def _normalised(jpeg: bytes) -> bytes:
+        """The engine stores drawings re-encoded: use the same bytes as the key."""
+        return Engine._bk_jpeg(jpeg)
+
+    async def _push_panel(self, g) -> None:
+        """A test match changed phase: put a fresh panel at the bottom of the admin's chat."""
+        if not self._bot:
+            return
+        text, kb = self._test_panel(g.chat_id)
+        try:
+            await self._bot.send_message(g.chat_id, text, reply_markup=kb)
+        except TelegramError as e:
+            LOG.warning("could not send the test panel: %s", e)
 
     async def _show_panel(self, q, uid: int) -> None:
         text, kb = self._test_panel(uid)
@@ -172,6 +245,7 @@ class Admin:
         chat, user = update.effective_chat, update.effective_user
         if chat.type != "private" or not self.is_bot_admin(user.id):
             return
+        self._bot = ctx.bot
         text, kb = self._test_panel(user.id)
         await update.message.reply_text(text, reply_markup=kb)
 
@@ -195,6 +269,7 @@ class Admin:
             await q.answer()
             return
         action = q.data.split(":", 1)[1]
+        self._bot = ctx.bot
         await q.answer()
 
         if action == "menu":
@@ -284,8 +359,7 @@ class Admin:
                 "/t N testo = scrive come Test N\nMini App: scegli il giocatore dalla barra gialla.",
                 reply_markup=self._back())
             await self.engine.new_test_game(uid, "it", mode, int(n))
-            text, kb = self._test_panel(uid)
-            await ctx.bot.send_message(uid, text, reply_markup=kb)
+
 
         elif action == "tc":
             await self._show_panel(q, uid)

@@ -156,8 +156,9 @@ FONT_PATHS = (
     "/usr/share/fonts/TTF/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
 )
-SIZE = (640, 480)
-LABEL_H = 56
+SIZE = (640, 560)
+TEXT_H = 132            # top band: who wrote it + the phrase
+LABEL_H = 44            # bottom band: who drew it
 
 
 def available() -> bool:
@@ -190,58 +191,60 @@ def _wrap(draw, text: str, font, width: int) -> list[str]:
     return lines + [line] if line else lines
 
 
-def _text_frame(label: str, text: str):
+def _frame(text_label: str, text: str, draw_label: str, jpeg: bytes | None):
+    """One frame = a phrase (with its author) above the drawing made from it (with its author)."""
     from PIL import Image, ImageDraw
-    img = Image.new("RGB", SIZE, "#fdf6e3")
+    img = Image.new("RGB", SIZE, "white")
     d = ImageDraw.Draw(img)
-    small, big = _font(22), _font(34)
-    d.text((24, 18), label, font=small, fill="#657b83")
-    lines = _wrap(d, text, big, SIZE[0] - 80)
-    for size in (34, 28, 24, 20):                    # long phrases: shrink until they fit
+    # top band
+    d.rectangle((0, 0, SIZE[0], TEXT_H), fill="#fdf6e3")
+    d.text((20, 10), text_label, font=_font(20), fill="#657b83")
+    for size in (32, 28, 24, 20, 17):               # long phrases: shrink until they fit
         big = _font(size)
-        lines = _wrap(d, text, big, SIZE[0] - 80)
-        if len(lines) * (size + 10) <= SIZE[1] - 140:
+        lines = _wrap(d, text, big, SIZE[0] - 40)
+        if len(lines) * (size + 6) <= TEXT_H - 42:
             break
-    lh = big.size + 10
-    y = (SIZE[1] - len(lines) * lh) // 2 + 10
+    lh = big.size + 6
+    y = 36 + (TEXT_H - 42 - len(lines) * lh) // 2
     for line in lines:
         w = d.textlength(line, font=big)
         d.text(((SIZE[0] - w) / 2, y), line, font=big, fill="#073642")
         y += lh
-    return img
-
-
-def _draw_frame(label: str, jpeg: bytes):
-    from PIL import Image, ImageDraw
-    img = Image.new("RGB", SIZE, "white")
-    art = Image.open(io.BytesIO(jpeg)).convert("RGB")
-    art.thumbnail((SIZE[0], SIZE[1] - LABEL_H))
-    img.paste(art, ((SIZE[0] - art.width) // 2, 0))
-    d = ImageDraw.Draw(img)
+    # drawing
+    try:
+        art = Image.open(io.BytesIO(jpeg or BLANK_JPEG)).convert("RGB")
+    except Exception:                               # undecodable picture: show a blank canvas
+        art = Image.open(io.BytesIO(BLANK_JPEG)).convert("RGB")
+    art.thumbnail((SIZE[0], SIZE[1] - TEXT_H - LABEL_H))
+    img.paste(art, ((SIZE[0] - art.width) // 2, TEXT_H + (SIZE[1] - TEXT_H - LABEL_H - art.height) // 2))
+    # bottom band
     d.rectangle((0, SIZE[1] - LABEL_H, SIZE[0], SIZE[1]), fill="#eee8d5")
-    d.text((24, SIZE[1] - LABEL_H + 14), label, font=_font(24), fill="#073642")
+    d.text((20, SIZE[1] - LABEL_H + 11), draw_label, font=_font(22), fill="#073642")
     return img
 
 
 def make_gif(items: list[dict], labels: dict[str, str]) -> bytes:
-    """One chain -> an animated GIF.
+    """One chain -> an animated GIF, one frame per phrase + drawing pair.
 
     `items` are {"kind": "text"|"draw", "name": str, "text": str | None, "jpeg": bytes | None}
     in order; `labels` holds the captions: "start", "draw", "describe" with a {name} placeholder.
     """
     frames, durations = [], []
-    for i, it in enumerate(items):
+    i = 0
+    while i < len(items):
+        it = items[i]
         if it["kind"] == "text":
-            label = labels["start" if i == 0 else "describe"].format(name=it["name"])
-            frames.append(_text_frame(label, it.get("text") or "…"))
-            durations.append(min(6000, 2200 + 60 * len(it.get("text") or "")))
-        else:
-            label = labels["draw"].format(name=it["name"])
-            try:
-                frames.append(_draw_frame(label, it.get("jpeg") or BLANK_JPEG))
-            except Exception:                   # undecodable picture: show a blank canvas
-                frames.append(_draw_frame(label, BLANK_JPEG))
+            nxt = items[i + 1] if i + 1 < len(items) and items[i + 1]["kind"] == "draw" else None
+            text = it.get("text") or "…"
+            frames.append(_frame(labels["start" if i == 0 else "describe"].format(name=it["name"]), text,
+                                 labels["draw"].format(name=nxt["name"]) if nxt else "",
+                                 nxt.get("jpeg") if nxt else None))
+            durations.append(min(7000, 3200 + 60 * len(text)))
+            i += 2 if nxt else 1
+        else:                                       # a drawing with no phrase before it (not expected)
+            frames.append(_frame("", "", labels["draw"].format(name=it["name"]), it.get("jpeg")))
             durations.append(3200)
+            i += 1
     durations[-1] += 3000
     out = io.BytesIO()
     frames[0].save(out, format="GIF", save_all=True, append_images=frames[1:], duration=durations,

@@ -465,7 +465,8 @@ def test_old_database_gets_the_latejoin_column(tmp_path):
     con.execute("INSERT INTO chat_settings VALUES (1, 'en', 'everyone')")
     con.commit(); con.close()
     db = Database(p)
-    assert db.get_settings(1) == {"lang": "en", "words": "everyone", "latejoin": "on", "drawtime": "auto"}
+    assert db.get_settings(1) == {"lang": "en", "words": "everyone", "latejoin": "on", "drawtime": "auto",
+                                 "cycles": "auto"}
     assert db.set_setting(1, "latejoin", "off") and db.get_settings(1)["latejoin"] == "off"
 
 
@@ -522,13 +523,25 @@ def test_classic_guess_rules(env, monkeypatch):
     assert len(env.engine.live(env.CHAT, g.turn_no, 0, 0)["attempts"]) == 2
 
 
-def test_speedrun_rejects_mini_app_guesses(env):
+def test_speedrun_guesses_work_in_the_mini_app_too(env):
     g = env.start_match(3, mode="speedrun")
-    env.to_drawing()
-    a = next(u for u in g.players if u != g.turn.drawer)
-    assert env.guess(a, "x") is None                         # goes through the chat instead
-    with pytest.raises(GameError):
-        env.run(env.engine.web_guess(env.CHAT, a, "x"))
+    t = env.to_drawing()
+    a = next(u for u in g.players if u != t.drawer)
+    res = env.run(env.engine.web_guess(env.CHAT, a, "qzxqzx"))
+    assert res["result"] == "wrong" and any("qzxqzx" in x for x in env.io.texts())   # echoed in the chat
+    env.run(env.io.advance(config.GUESS_MIN_INTERVAL + 1))
+    res = env.run(env.engine.web_guess(env.CHAT, a, t.word.word))
+    assert res["result"] == "right" and res["pts"] > 0
+    assert g.phase != Phase.DRAWING                          # the first correct guess ends the round
+    assert not env.io.deleted
+
+
+def test_classic_still_refuses_guesses_in_the_chat(env):
+    g = env.start_match(3, mode="classic")
+    t = env.to_drawing()
+    a = next(u for u in g.players if u != t.drawer)
+    env.chat(a, t.word.word, mid=77)
+    assert 77 in env.io.deleted and g.scores[a] == 0
 
 
 def test_classic_points_use_the_same_time_curve(env):

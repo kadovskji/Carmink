@@ -176,3 +176,33 @@ def test_panel_buttons_play_a_whole_broken_game(monkeypatch):
                or "quadrato" in x or "arancione" in x or "stella" in x or "blu" in x
                or "rombo" in x or "verde" in x or "cuore" in x or "viola" in x
                or "croce" in x or "rosa" in x for x in env.io.texts()) or env.io.animations
+
+
+def test_test_phrases_are_a_shape_with_a_colour_and_follow_the_chain():
+    env = Env()
+    a = make_admin(env)
+    for _ in range(30):
+        shape, colour = a._phrase().split()
+        assert shape in {s for s, _ in a.SHAPES}
+        assert colour in {c for m, f, _ in a.COLORS for c in (m, f)}
+    g = start(env, "broken", 4)
+    env.run(a._test_action(ADMIN, "pall", 0))
+    assert g.broken.kind == "draw"
+    env.run(a._test_action(ADMIN, "dall", 0))
+    assert g.broken.kind == "text"                      # the describe step still has the 🎲 buttons
+    rows = a._test_panel(ADMIN)[1].inline_keyboard
+    assert any("🎲" in b.text for r in rows for b in r)
+    for u in g.test_ids:                                # the description is what the drawing shows
+        assert a._text_for(g, u) == a._drawn[g.broken.given[u]["jpeg"]]
+    env.run(a._test_action(ADMIN, "pall", 0))
+    assert g.broken.step == 3 and g.broken.kind == "draw"
+
+
+def test_the_drawing_of_a_phrase_has_its_colour():
+    env = Env()
+    a = make_admin(env)
+    from PIL import Image
+    import io as _io
+    img = Image.open(_io.BytesIO(a._quick_drawing("cerchio rossa"))).convert("RGB")
+    r, g_, b = img.getpixel((200, 150))
+    assert r > 180 and g_ < 80 and b < 90

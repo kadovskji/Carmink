@@ -45,7 +45,7 @@ DEFAULT_MODE = "speedrun"
 
 # ---------------------------------------------------------------- Broken Canva
 MIN_PLAYERS_BROKEN = 4
-BROKEN_MAX_STEPS = 7        # passes after the initial phrase (the chain always ends with a drawing)
+BROKEN_MAX_CYCLES = 5       # a cycle = a phrase/description and its drawing; default: one per player, at most this many
 BROKEN_PHRASE_SECONDS = 120
 BROKEN_DESCRIBE_SECONDS = 60
 BROKEN_GRACE_SECONDS = 3    # extra time for the Mini App to send the drawing when its clock hits zero

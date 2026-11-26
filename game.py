@@ -63,10 +63,11 @@ class BrokenState:
         return "draw" if self.step % 2 else "text"
 
 
-def broken_steps(n_players: int) -> int:
-    """Passes after the phrase: the largest odd number <= min(players - 1, BROKEN_MAX_STEPS)."""
-    s = min(n_players - 1, config.BROKEN_MAX_STEPS)
-    return max(1, s if s % 2 else s - 1)
+def broken_steps(n_players: int, cycles: int | None = None) -> int:
+    """Passes after the phrase. A cycle is a phrase (or description) and its drawing, so `cycles`
+    cycles are 2 * cycles - 1 passes. Default: one cycle per player, at most BROKEN_MAX_CYCLES."""
+    c = cycles or min(n_players, config.BROKEN_MAX_CYCLES)
+    return 2 * max(1, c) - 1
 
 
 @dataclass
@@ -96,6 +97,7 @@ class Game:
     started_at: float | None = None
     broken: BrokenState | None = None
     draw_seconds: int = config.DRAW_SECONDS    # drawing time of this match (see /settings)
+    cycles: int | None = None                  # Broken Canva cycles (None = one per player, see /settings)
     test: bool = False                          # admin test match: fake players, nothing saved
     test_ids: list[int] = field(default_factory=list)       # fake players, in order (Test 1, Test 2…)
 

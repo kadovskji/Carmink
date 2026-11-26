@@ -15,7 +15,7 @@ A Telegram party game bot where players take turns drawing a word while everybod
 | Start | 20 s | The drawer must start drawing, otherwise the turn is skipped |
 | Drawing | 2 min (3 min in Broken Canva), adjustable in `/settings`: 60 s, 90 s, 2, 3, 4 or 5 min | The clock starts at the first stroke. The others guess by writing in the chat |
 
-4. A correct guess is deleted from the chat (so it doesn't spoil the word). In **Speedrun** the first player who guesses wins the round and it ends at once. In **Classic** guesses are typed in the Mini App; a message with the answer written in the chat is deleted and doesn't count. The round ends when everybody has guessed or time is up.
+4. A correct guess is deleted from the chat (so it doesn't spoil the word). In **Speedrun** guesses can be written in the chat or in the Mini App text field; the first player who guesses wins the round and it ends at once. In **Classic** guesses are typed in the Mini App; a message with the answer written in the chat is deleted and doesn't count. The round ends when everybody has guessed or time is up.
 5. When all the turns are done the final scoreboard is shown.
 
 ### Game modes
@@ -31,9 +31,9 @@ A Telegram party game bot where players take turns drawing a word while everybod
 Needs 4+ players, and every player must have opened the bot in private first (the group message has a *Start the bot* button; without it the bot can't write to them, so `/join` is refused). Nobody can join once it has started, and there are no points or winners: only the match counts in the statistics.
 
 1. Everybody privately sends the bot a funny phrase (2 minutes, up to 120 characters; sending another replaces it). The group message shows who has written. Whoever sends nothing is dropped.
-2. Pass after pass, each player receives the last item of somebody else's chain: a phrase to **draw** in the Mini App (3 minutes by default, from receipt; the same `/settings` option, *Done* ends it early) or a drawing to **describe** with a private message (60 seconds). A pass closes as soon as everybody has answered; a missing drawing becomes the last draft or a blank canvas, a missing description becomes "…".
-3. Nobody ever receives anything derived from their own phrase, and every chain ends with a drawing. The number of passes after the phrase is the largest odd number up to `min(players − 1, 7)`.
-4. At the end the bot posts one GIF per chain (phrase → drawing → description → …, with the author of every frame). It needs Pillow and a font (`fonts-dejavu-core`); without Pillow it posts a text recap.
+2. Pass after pass, each player receives the last item of somebody else's chain: a phrase to **draw** in the Mini App (3 minutes by default, from receipt; the same `/settings` option, *Done* ends it early) or a drawing to **describe** (60 seconds), with a private message or from the text field under the canvas in the Mini App. A pass closes as soon as everybody has answered; a missing drawing becomes the last draft or a blank canvas, a missing description becomes "…".
+3. A *cycle* is a description and its drawing. `/settings` sets the number of cycles (default: one per player, max 5). With more cycles than other players you meet again chains you already worked on, evolved. Every chain ends with a drawing.
+4. At the end the bot posts one GIF per chain (each frame has the caption and the drawing made from it, with both authors). It needs Pillow and a font (`fonts-dejavu-core`); without Pillow it posts a text recap.
 
 ### Points
 
@@ -64,7 +64,7 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 | `/deleteword <word>` | Remove a word that was added with `/addword` |
 | `/stats` | Group statistics |
 | `/mystats` | Your statistics (this group, or all groups if used in private) |
-| `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match, drawing time |
+| `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match, drawing time, Broken Canva cycles |
 | `/admin` | **Bot owner only**, private chat only: announcements, restart, git pull, log, 🧪 test match. Not shown in the command menu |
 | `/t <n> <text>` | **Bot owner only**, private chat: during a test match, writes `<text>` as fake player *n* (guess in Speedrun/Classic, phrase or description in Broken Canva) |
 

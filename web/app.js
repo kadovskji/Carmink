@@ -26,7 +26,11 @@
       startOther: "{name} sta per iniziare a disegnare…",
       startYou: "Inizia a disegnare entro {s}s: il tempo parte dal primo tratto",
       draw: "Disegna:",
-      watching: "{name} sta disegnando. Scrivi la risposta nella chat!",
+      watching: "{name} sta disegnando. Scrivi la risposta qui sotto o nella chat!",
+      bkPhraseTitle: "Scrivi una frase da far disegnare",
+      bkDescribeTitle: "Descrivi il disegno",
+      bkPhrasePh: "La tua frase…",
+      bkDescribePh: "La tua descrizione…",
       nohint: "Nessun suggerimento (potrebbero arrivare)",
       timeUp: "Round concluso: guarda la chat.",
       skipConfirm: "Saltare il tuo turno?",
@@ -39,8 +43,8 @@
       rightAtt: "✅ {name} ha indovinato!",
       bkStep: "Passo {n}/{total}",
       bkPhrase: "Frasi iniziali",
-      bkWrite: "Scrivi la tua frase al bot, in privato. {s}s",
-      bkDescribe: "Descrivi il disegno al bot, in privato. {s}s",
+      bkWrite: "Scrivi la tua frase qui sotto (o al bot, in privato). {s}s",
+      bkDescribe: "Descrivi il disegno qui sotto (o al bot, in privato). {s}s",
       bkWait: "Fatto! Aspettiamo gli altri… {s}s",
       bkOut: "Questo giro guardi: non sei tra i giocatori.",
       bkDone: "✅ Fatto",
@@ -57,7 +61,11 @@
       startOther: "{name} is about to start drawing…",
       startYou: "Start drawing within {s}s: the clock starts at your first stroke",
       draw: "Draw:",
-      watching: "{name} is drawing. Type your answer in the chat!",
+      watching: "{name} is drawing. Type your answer below or in the chat!",
+      bkPhraseTitle: "Write a phrase for the others to draw",
+      bkDescribeTitle: "Describe the drawing",
+      bkPhrasePh: "Your phrase…",
+      bkDescribePh: "Your description…",
       nohint: "No hint yet (some may come)",
       timeUp: "Round over: check the chat.",
       skipConfirm: "Skip your turn?",
@@ -70,8 +78,8 @@
       rightAtt: "✅ {name} got it!",
       bkStep: "Pass {n}/{total}",
       bkPhrase: "First phrases",
-      bkWrite: "Write your phrase to the bot, in private. {s}s",
-      bkDescribe: "Describe the drawing to the bot, in private. {s}s",
+      bkWrite: "Write your phrase below (or to the bot, in private). {s}s",
+      bkDescribe: "Describe the drawing below (or to the bot, in private). {s}s",
       bkWait: "Done! Waiting for the others… {s}s",
       bkOut: "You are only watching: you are not one of the players.",
       bkDone: "✅ Done",
@@ -164,26 +172,34 @@
     }
 
     const phase = st.phase, drawer = st.role === "drawer";
-    const broken = st.mode === "broken", bkDraw = bkDrawNow();
+    const broken = st.mode === "broken", bkDraw = bkDrawNow(), bkText = bkTextNow();
+    const bkImg = bkText && !!st.bk.image;
     const canvasOn = (drawer && (phase === "starting" || phase === "drawing")) || bkDraw;
     const viewOn = !drawer && !broken && phase === "drawing";
     $("hint").hidden = broken; $("skip").hidden = broken; $("bkdone").hidden = !broken;
     $("bkdone").textContent = t("bkDone");
     const attOn = st.mode === "classic" && phase === "drawing" && (canvasOn || viewOn);
-    const guessOn = attOn && !drawer && st.in_game;
+    // guesses in the Mini App: Classic and Speedrun (a field under the canvas); Broken Canva: the
+    // phrases and descriptions, which can also be sent to the bot in private
+    const guessOn = (attOn && !drawer && st.in_game) || (st.mode === "speedrun" && viewOn && st.in_game) || bkText;
     show("choose", drawer && phase === "choosing");
-    show("board", canvasOn || viewOn);
+    show("board", canvasOn || viewOn || bkText);
+    show("stage", !bkText || bkImg);
     show("tools", canvasOn);
     show("attempts", attOn);
     show("guessbar", guessOn && st.me_guessed == null);
     show("mine", guessOn && st.me_guessed != null);
     if (guessOn && st.me_guessed != null) $("mine").textContent = t("youGuessed", { p: st.me_guessed });
-    $("guess").placeholder = t("guessPh");
     $("send").textContent = t("send");
     document.body.classList.toggle("has-tools", canvasOn);
     document.body.classList.toggle("has-att", attOn && drawer);
     document.body.classList.toggle("has-guess", guessOn);
-    show("msg", !(canvasOn || viewOn || (drawer && phase === "choosing")));
+    show("msg", !(canvasOn || viewOn || bkText || (drawer && phase === "choosing")));
+    const inp = $("guess");
+    inp.maxLength = bkText ? (st.bk.max || 120) : 60;
+    inp.placeholder = bkText ? t(bkImg ? "bkDescribePh" : "bkPhrasePh") : t("guessPh");
+    if (bkText) $("word").textContent = t(bkImg ? "bkDescribeTitle" : "bkPhraseTitle");
+    if (bkImg) loadGiven();
     if (broken && st.bk) $("info").textContent = st.bk.step ? t("bkStep", { n: st.bk.step, total: st.bk.steps }) : t("bkPhrase");
     else $("info").textContent = st.turn ? t("round", { n: st.turn, total: st.turns }) : "Carmink";
 
@@ -240,6 +256,30 @@
     } else {
       w.innerHTML = st.mask ? `<code>${esc(st.mask)}</code>` : `${ICON[st.cat] || ""} <small>${t("nohint")}</small>`;
     }
+  }
+
+  function bkTextNow() {
+    const b = st.mode === "broken" ? st.bk : null;
+    return !!(b && (st.phase === "writing" || st.phase === "step") && b.kind === "text" && b.active && !b.done);
+  }
+
+  // Broken Canva: the drawing to describe is shown on the canvas (read only)
+  let givenKey = null;
+  async function loadGiven() {
+    if (givenKey === turnKey) return;
+    givenKey = turnKey;
+    const key = turnKey;
+    try {
+      const res = await api("bk/given");
+      if (!res.ok || res.status === 204) { givenKey = null; return; }
+      const url = URL.createObjectURL(await res.blob());
+      const img = new Image();
+      img.onload = () => {
+        if (turnKey === key) { white(); ctx.drawImage(img, 0, 0, W, H); }
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    } catch (e) { givenKey = null; }
   }
 
   function bkDrawNow() {
@@ -491,7 +531,9 @@
   const ending = (e) => { if (e.pointerId === activeId) endStroke(e); };
   cv.addEventListener("pointerup", ending);
   cv.addEventListener("pointercancel", ending);
-  cv.addEventListener("lostpointercapture", () => endStroke());
+  // only the stroke that owns the pointer: with quick strokes the "lost capture" of the previous
+  // one arrives after the next pen-down and would end the new stroke on its first point
+  cv.addEventListener("lostpointercapture", (e) => { if (e.pointerId === activeId) endStroke(); });
   window.addEventListener("pointerup", ending);            // released outside the canvas
   window.addEventListener("blur", () => endStroke());
 
@@ -592,13 +634,14 @@
     if (!text || sending) return;
     sending = true;
     try {
-      const res = await api("guess", "POST", { text });
+      const res = await api(st.mode === "broken" ? "bk/text" : "guess", "POST", { text });
       const j = await res.json().catch(() => ({}));
       if (res.ok) {
         input.value = "";
-        if (j.result === "close") { myClose.add(j.id); flash(t("close")); }
+        if (st.mode === "broken") refresh();
+        else if (j.result === "close") { myClose.add(j.id); flash(t("close")); }
         else if (j.result === "right") { flash(""); refresh(); }
-      } else if (j.error === "already_guessed" || j.error === "wrong_phase") refresh();
+      } else if (["already_guessed", "wrong_phase", "not_player", "no_game"].includes(j.error)) refresh();
       /* too_fast: keep the text, the player presses send again */
     } catch (err) { /* offline: keep the text */ }
     sending = false;
