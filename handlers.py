@@ -7,7 +7,6 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 import config
-import words
 from db import ALLOWED_SETTINGS, Database
 from engine import Engine, admin_button
 from i18n import LANGUAGES, T
@@ -150,57 +149,6 @@ class Handlers:
             await self.engine.on_message(update.effective_chat.id, update.effective_user.id,
                                          msg.text, msg.message_id)
 
-    # ------------------------------------------------------------ group dictionary
-    async def _can_edit_words(self, update, ctx) -> bool:
-        chat, user = update.effective_chat, update.effective_user
-        if self.db.get_settings(chat.id)["words"] == "everyone":
-            return True
-        if await self._is_admin(ctx, chat.id, user.id):
-            return True
-        await self._reply(update, T(self._lang(chat.id), "word_admin"))
-        return False
-
-    async def addword(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if not await self._group(update):
-            return
-        chat, user = update.effective_chat, update.effective_user
-        lang = self._lang(chat.id)
-        if not await self._can_edit_words(update, ctx):
-            return
-        args = list(ctx.args or [])
-        diff = 2
-        if len(args) > 1 and args[-1] in ("1", "2", "3"):
-            diff = int(args.pop())
-        if not args:
-            return await self._reply(update, T(lang, "word_usage_add"))
-        parsed = words.parse_custom(" ".join(args))
-        if not parsed:
-            return await self._reply(update, T(lang, "word_bad"))
-        word, alts = parsed
-        if self.db.count_custom(chat.id) >= config.CUSTOM_WORDS_MAX:
-            return await self._reply(update, T(lang, "word_full", max=config.CUSTOM_WORDS_MAX))
-        if self.db.add_word(chat.id, lang, word, diff, user.id, alts):
-            extra = T(lang, "word_alts", alts=html.escape(", ".join(alts))) if alts else ""
-            await self._reply(update, T(lang, "word_added", word=html.escape(word), diff=diff) + extra)
-        else:
-            await self._reply(update, T(lang, "word_dup", word=html.escape(word)))
-
-    async def deleteword(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if not await self._group(update):
-            return
-        chat = update.effective_chat
-        lang = self._lang(chat.id)
-        if not await self._can_edit_words(update, ctx):
-            return
-        word = " ".join(ctx.args or []).strip()
-        if not word:
-            return await self._reply(update, T(lang, "word_usage_del"))
-        key = html.escape(word)
-        if self.db.delete_word(chat.id, lang, word):
-            await self._reply(update, T(lang, "word_deleted", word=key))
-        else:
-            await self._reply(update, T(lang, "word_missing", word=key))
-
     # ------------------------------------------------------------ statistics
     async def stats(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._group(update):
@@ -236,6 +184,7 @@ class Handlers:
         rows = [[InlineKeyboardButton(
             f"{T(lang, 'set_' + k)}: {T(lang, f'set_{k}_{cfg[k]}')}", callback_data=f"s:{k}")]
             for k in SETTING_KEYS]
+        rows.append([InlineKeyboardButton(T(lang, "btn_dict"), url=self.engine.dict_link(chat_id))])
         return T(lang, "settings_title"), InlineKeyboardMarkup(rows)
 
     def _submenu(self, chat_id: int, key: str) -> tuple[str, InlineKeyboardMarkup]:

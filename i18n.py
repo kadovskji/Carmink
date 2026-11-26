@@ -27,14 +27,14 @@ STRINGS: dict[str, dict[str, str]] = {
               "indovinarla (in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; il disegnatore guadagna di più se "
               "indovinano in tanti.\n\n"
               "<b>Comandi</b>\n/newgame · /join · /ready · /nextgame · /wait &lt;minuti&gt; · /quit · /stop\n"
-              "/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt; · /stats · /mystats · /settings\n\n"
+              "/stats · /mystats · /settings\n\n"
               "Nel gruppo rendimi amministratore (con il permesso di eliminare i messaggi), altrimenti non vedo i tentativi e non posso cancellare le risposte.",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\nAdd me to a group and type /newgame. "
               "The current drawer has a few minutes to draw a word picked among three, the others try to guess it "
               "in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess.\n\n"
               "<b>Commands</b>\n/newgame · /join · /ready · /nextgame · /wait &lt;minutes&gt; · /quit · /stop\n"
-              "/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt; · /stats · /mystats · /settings\n\n"
+              "/stats · /mystats · /settings\n\n"
               "In the group make me an admin (with the permission to delete messages), or I can't see the guesses and can't delete the answers.",
     },
     "help": {
@@ -49,7 +49,7 @@ STRINGS: dict[str, dict[str, str]] = {
               "Nessun vincitore, alla fine arrivano le GIF. Servono 4 giocatori che abbiano avviato il bot in privato.\n\n"
               "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
               "<b>Avviso</b>\n/nextgame: ti scrivo in privato quando si apre la prossima partita (24 ore, dovrai comunque fare /join; rimandalo per annullare)\n"
-              "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
+              "<b>Dizionario del gruppo</b>\nIn /settings → 📚 Dizionario: aggiungi, modifica, esporta e importa le parole. Se il disegnatore scrive una parola sua e qualcuno la indovina, entra nel dizionario.\n"
               "<b>Altro</b>\n/stats · /mystats · /settings · /help",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
               "Players take turns drawing a word picked among three (time counted from the first stroke, adjustable in /settings: 2 minutes by default) while the others "
@@ -62,7 +62,7 @@ STRINGS: dict[str, dict[str, str]] = {
               "Nobody wins, GIFs come at the end. Needs 4 players who have started the bot in private.\n\n"
               "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
               "<b>Notice</b>\n/nextgame: I message you in private when the next match opens (24 hours, you still have to /join; send it again to cancel)\n"
-              "<b>Group dictionary</b>\n/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt;\n"
+              "<b>Group dictionary</b>\nIn /settings → 📚 Dictionary: add, edit, export and import words. If the drawer writes a word of his own and somebody guesses it, it joins the dictionary.\n"
               "<b>Other</b>\n/stats · /mystats · /settings · /help",
     },
     "start_group": {"it": "Per giocare usa /newgame in questo gruppo.",
@@ -163,21 +163,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "game_over": {"it": "🏁 <b>Partita finita!</b> Classifica finale:", "en": "🏁 <b>Match over!</b> Final scoreboard:"},
     "winner": {"it": "👑 Vince {names}!", "en": "👑 {names} wins!"},
     # ------------------------------------------------------------ dictionary
-    "word_usage_add": {"it": "Uso: /addword &lt;parola&gt; [| sinonimo | sinonimo…] [1-3] (1 facile, 2 media, 3 difficile)\nEsempio: /addword monopattino | scooter 3",
-                       "en": "Usage: /addword &lt;word&gt; [| synonym | synonym…] [1-3] (1 easy, 2 medium, 3 hard)\nExample: /addword scooter | kick scooter 3"},
-    "word_alts": {"it": "\nSinonimi accettati: {alts}", "en": "\nAccepted synonyms: {alts}"},
-    "word_usage_del": {"it": "Uso: /deleteword &lt;parola&gt;", "en": "Usage: /deleteword &lt;word&gt;"},
-    "word_admin": {"it": "Solo gli admin del gruppo possono modificare il dizionario (vedi /settings).",
-                   "en": "Only group admins can edit the dictionary (see /settings)."},
-    "word_bad": {"it": "Parola non valida: 2-30 lettere, al massimo 3 parole, niente numeri o simboli.",
-                 "en": "Invalid word: 2-30 letters, at most 3 words, no digits or symbols."},
-    "word_added": {"it": "✅ «{word}» aggiunta al dizionario del gruppo (difficoltà {diff}).",
-                   "en": "✅ «{word}» added to the group dictionary (difficulty {diff})."},
-    "word_dup": {"it": "«{word}» è già nel dizionario del gruppo.", "en": "«{word}» is already in the group dictionary."},
-    "word_full": {"it": "Il dizionario del gruppo è pieno ({max} parole).", "en": "The group dictionary is full ({max} words)."},
-    "word_deleted": {"it": "🗑 «{word}» tolta dal dizionario del gruppo.", "en": "🗑 «{word}» removed from the group dictionary."},
-    "word_missing": {"it": "«{word}» non è nel dizionario del gruppo (si possono togliere solo le parole aggiunte con /addword).",
-                     "en": "«{word}» is not in the group dictionary (only words added with /addword can be removed)."},
+    "btn_dict": {"it": "📚 Dizionario", "en": "📚 Dictionary"},
     # ------------------------------------------------------------ stats
     "stats_none": {"it": "Nessuna partita finita in questo gruppo, per ora.", "en": "No finished match in this group yet."},
     "stats_title": {"it": "📊 <b>Statistiche del gruppo</b> — {games} partite", "en": "📊 <b>Group statistics</b> — {games} matches"},
@@ -203,7 +189,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "set_lang_en": {"it": "🇬🇧 English", "en": "🇬🇧 English"},
     "settings_sub_lang": {"it": "Lingua dei messaggi e delle parole da disegnare. Si può cambiare anche per una sola partita con /newgame en.",
                           "en": "Language of the messages and of the words to draw. It can also be set for a single match with /newgame it."},
-    "set_words": {"it": "Dizionario del gruppo", "en": "Group dictionary"},
+    "set_words": {"it": "Chi modifica il dizionario", "en": "Who edits the dictionary"},
     "set_words_admins": {"it": "Solo admin", "en": "Admins only"},
     "set_words_everyone": {"it": "Tutti", "en": "Everyone"},
     "set_latejoin": {"it": "Ingresso a partita in corso", "en": "Joining a running match"},
@@ -212,7 +198,19 @@ STRINGS: dict[str, dict[str, str]] = {
     "settings_sub_latejoin": {
         "it": "Se consentito, /join funziona anche a partita iniziata (Speedrun e Classica): si indovina subito e si disegna alla fine.",
         "en": "If allowed, /join also works once a match has started (Speedrun and Classic): you guess at once and draw at the end."},
-    "settings_sub_words": {"it": "Chi può usare /addword e /deleteword.", "en": "Who can use /addword and /deleteword."},
+    "set_cycles": {"it": "Cicli Broken Canva", "en": "Broken Canva cycles"},
+    "set_cycles_auto": {"it": "Auto (il massimo possibile, max 5)", "en": "Auto (as many as fit, max 5)"},
+    "set_cycles_1": {"it": "1 ciclo", "en": "1 cycle"},
+    "set_cycles_2": {"it": "2 cicli", "en": "2 cycles"},
+    "set_cycles_3": {"it": "3 cicli", "en": "3 cycles"},
+    "set_cycles_4": {"it": "4 cicli", "en": "4 cycles"},
+    "set_cycles_5": {"it": "5 cicli", "en": "5 cycles"},
+    "settings_sub_cycles": {
+        "it": "Quanti cicli dura una partita di Broken Canva (un ciclo = una frase o descrizione e il suo disegno), per le partite che iniziano da ora. "
+              "Auto: il massimo possibile senza che nessuno tocchi due volte la stessa catena (al massimo 5).",
+        "en": "How many cycles a Broken Canva match lasts (a cycle = a phrase or description and its drawing), for matches started from now on. "
+              "Auto: as many as possible without anyone touching a chain twice (at most 5)."},
+    "settings_sub_words": {"it": "Chi può modificare il dizionario del gruppo (pulsante 📚 Dizionario).", "en": "Who can edit the group dictionary (the 📚 Dictionary button)."},
 }
 
 
@@ -318,18 +316,6 @@ STRINGS.update({
     "settings_sub_drawtime": {
         "it": "Quanto dura ogni disegno, per le partite che iniziano da ora. Auto: 2 minuti in Speedrun e Classica, 3 in Broken Canva.",
         "en": "How long each drawing lasts, for matches started from now on. Auto: 2 minutes in Speedrun and Classic, 3 in Broken Canva."},
-    "set_cycles": {"it": "Cicli Broken Canva", "en": "Broken Canva cycles"},
-    "set_cycles_auto": {"it": "Auto (uno per giocatore, max 5)", "en": "Auto (one per player, max 5)"},
-    "set_cycles_1": {"it": "1 ciclo", "en": "1 cycle"},
-    "set_cycles_2": {"it": "2 cicli", "en": "2 cycles"},
-    "set_cycles_3": {"it": "3 cicli", "en": "3 cycles"},
-    "set_cycles_4": {"it": "4 cicli", "en": "4 cycles"},
-    "set_cycles_5": {"it": "5 cicli", "en": "5 cycles"},
-    "settings_sub_cycles": {
-        "it": "Quanti cicli dura una partita di Broken Canva (un ciclo = una frase o descrizione e il suo disegno), per le partite che iniziano da ora. "
-              "Auto: un ciclo per giocatore, al massimo 5.",
-        "en": "How many cycles a Broken Canva match lasts (a cycle = a phrase or description and its drawing), for matches started from now on. "
-              "Auto: one cycle per player, at most 5."},
     "btn_make_admin": {"it": "👑 Rendimi amministratore", "en": "👑 Make me an admin"},
     "welcome_group": {
         "it": "🎨 Ciao! Sono <b>Carmink</b>: si disegna, gli altri indovinano. Scrivete /newgame per iniziare, /help per le regole.\n\n"

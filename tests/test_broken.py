@@ -23,11 +23,9 @@ def jpeg(color="white") -> bytes:
     return b.getvalue()
 
 
-def start_broken(env: Env, n: int = 4, lang: str = "it", cycles: int | str = 2):
-    """Most tests use 2 cycles (3 passes); the default is one cycle per player."""
+def start_broken(env: Env, n: int = 4, lang: str = "it"):
     for uid in range(1, n + 1):
         env.db.add_dm(uid)
-    env.db.set_setting(env.CHAT, "cycles", str(cycles))
     return env.start_match(n, lang, "broken")
 
 
@@ -52,27 +50,43 @@ def play_to_the_end(env: Env):
 
 
 # ---------------------------------------------------------------- rules
-@pytest.mark.parametrize("n,steps", [(4, 7), (5, 9), (6, 9), (12, 9)])
-def test_default_is_one_cycle_per_player_at_most_5(n, steps):
+@pytest.mark.parametrize("n,steps", [(4, 3), (5, 3), (6, 5), (7, 5), (10, 9), (12, 9)])
+def test_default_is_as_many_cycles_as_fit_without_repeating_chains_at_most_5(n, steps):
+    assert steps <= n - 1
     assert broken_steps(n) == steps and steps % 2 == 1
 
 
 @pytest.mark.parametrize("cycles,steps", [(1, 1), (2, 3), (3, 5), (5, 9)])
 def test_a_cycle_is_a_description_and_its_drawing(cycles, steps):
-    assert broken_steps(6, cycles) == steps          # the phrase counts as the first description
+    assert broken_steps(10, cycles) == steps          # the phrase counts as the first description
+
+
+def test_nobody_works_on_a_chain_twice_whatever_the_setting():
+    for n in range(4, 30):
+        for c in (None, 1, 2, 3, 4, 5):
+            assert broken_steps(n, c) <= n - 1 and broken_steps(n, c) <= 9
 
 
 def test_cycles_setting_changes_the_length_of_the_match(env):
-    g = start_broken(env, 5, cycles=3)
+    env.db.set_setting(env.CHAT, "cycles", "2")
+    g = start_broken(env, 6)
     write_all(env)
-    assert g.broken.steps == 5
-    g2 = Env()
+    assert g.broken.steps == 3 and g.cycles == 2
+    env.db.set_setting(env.CHAT, "cycles", "5")        # more than fits: lowered
+    e2 = Env()
     for u in range(1, 5):
-        g2.db.add_dm(u)
-    g2.start_match(4, "it", "broken")                 # auto: one per player
-    assert g2.game.cycles is None
-    write_all(g2)
-    assert g2.game.broken.steps == 7
+        e2.db.add_dm(u)
+    e2.db.set_setting(e2.CHAT, "cycles", "5")
+    e2.start_match(4, "it", "broken")
+    write_all(e2)
+    assert e2.game.broken.steps == 3
+    e3 = Env()
+    for u in range(1, 7):
+        e3.db.add_dm(u)
+    e3.start_match(6, "it", "broken")                  # auto: 3 cycles for 6 players
+    assert e3.game.cycles is None
+    write_all(e3)
+    assert e3.game.broken.steps == 5
     assert not env.db.set_setting(env.CHAT, "cycles", "6") and env.db.set_setting(env.CHAT, "cycles", "5")
 
 
@@ -370,3 +384,17 @@ def test_gif_of_a_chain_with_long_text_and_wide_characters():
                                      "describe": "{name} wrote"})
     im = Image.open(io.BytesIO(data))
     assert im.n_frames == 2 and im.size == gifmaker.SIZE      # one frame per phrase + drawing pair
+
+
+@pytest.mark.parametrize("n", [4, 5, 6, 7])
+def test_every_player_appears_once_per_chain(env, n):
+    g = start_broken(env, n)
+    chains = g.broken.chains
+    while env.game is not None:
+        if g.broken.kind == "draw":
+            draw_all(env)
+        else:
+            write_all(env, prefix="descr")
+    for chain in chains:
+        authors = [it["author"] for it in chain]
+        assert len(authors) == len(set(authors)), authors

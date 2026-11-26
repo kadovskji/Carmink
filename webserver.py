@@ -79,6 +79,18 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
         engine.choose(chat_id, uid, index)
         return JSONResponse({"ok": True})
 
+    async def choose_more(request, chat_id, uid):
+        engine.choose_more(chat_id, uid)
+        return JSONResponse({"ok": True})
+
+    async def choose_custom(request, chat_id, uid):
+        try:
+            text = (await request.json())["text"]
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"error": "bad_request"}, status_code=400)
+        engine.choose_custom(chat_id, uid, text)
+        return JSONResponse({"ok": True})
+
     async def start(request, chat_id, uid):
         await engine.start_drawing(chat_id, uid)
         return JSONResponse({"ok": True})
@@ -153,6 +165,42 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
         data = engine.bk_given(chat_id, uid)
         return Response(data, media_type="image/jpeg") if data else Response(status_code=204)
 
+    # ---- the group dictionary page (start parameter d<chat>)
+    async def body_of(request) -> dict | None:
+        if int(request.headers.get("content-length") or 0) > config.DICT_IMPORT_MAX_BYTES + 4096:
+            return None
+        try:
+            data = await request.json()
+        except ValueError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    async def dict_get(request, chat_id, uid):
+        return JSONResponse(await engine.dict_get(chat_id, uid, request.query_params.get("lang")))
+
+    async def dict_post(request, chat_id, uid):
+        b = await body_of(request)
+        if b is None:
+            return JSONResponse({"error": "bad_request"}, status_code=400)
+        action, lang = request.path_params["action"], b.get("lang")
+        if action == "add":
+            await engine.dict_add(chat_id, uid, lang, b.get("text"), b.get("diff"))
+        elif action == "edit":
+            await engine.dict_edit(chat_id, uid, lang, str(b.get("word", "")), b.get("new"),
+                                   b.get("alts") or [], b.get("diff"), bool(b.get("lock")))
+        elif action == "delete":
+            await engine.dict_delete(chat_id, uid, lang, str(b.get("word", "")))
+        elif action == "export":
+            await engine.dict_export(chat_id, uid)
+        elif action == "code":
+            return JSONResponse({"ok": True, **await engine.dict_code(chat_id, uid)})
+        elif action == "import":
+            return JSONResponse({"ok": True, **await engine.dict_import(
+                chat_id, uid, lang, b.get("text"), b.get("code"), bool(b.get("dry")), bool(b.get("update")))})
+        else:
+            return JSONResponse({"error": "bad_request"}, status_code=404)
+        return JSONResponse({"ok": True})
+
     async def health(request):
         return JSONResponse({"ok": True, "games": len(engine.games)})
 
@@ -160,7 +208,11 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
         Route("/api/health", health),
         Route("/api/state", api(state)),
         Route("/api/choose", api(choose), methods=["POST"]),
+        Route("/api/choose_more", api(choose_more), methods=["POST"]),
+        Route("/api/choose_custom", api(choose_custom), methods=["POST"]),
         Route("/api/start", api(start), methods=["POST"]),
+        Route("/api/dict", api(dict_get)),
+        Route("/api/dict/{action}", api(dict_post), methods=["POST"]),
         Route("/api/hint", api(hint), methods=["POST"]),
         Route("/api/skip", api(skip), methods=["POST"]),
         Route("/api/events", api(post_events), methods=["POST"]),

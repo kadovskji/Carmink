@@ -90,6 +90,21 @@ ATTEMPT_MAX_LEN = 60
 
 # ---------------------------------------------------------------- words
 CUSTOM_ALTS_MAX = 5            # synonyms accepted per custom word
-CUSTOM_WORDS_MAX = 500      # per group
-WORD_MAX_LEN = 30
+CUSTOM_WORDS_MAX = 3000     # words in a group's dictionary (every language)
+DICT_MIN_WORDS = 30         # a group cannot delete words below this many (per language)
+CHOOSE_CUSTOM_SECONDS = 30  # the drawer who taps "write your own" gets this long
+DICT_CODE_HOURS = 24        # how long a dictionary share code works
+DICT_IMPORT_MAX_BYTES = 400_000
+
+# ---------------------------------------------------------------- adaptive difficulty (see difficulty.py)
+EASE_PRIOR = {1: 0.75, 2: 0.5, 3: 0.25}   # what a word of each level is expected to score
+EASE_PRIOR_WEIGHT = 3       # the prior counts like this many appearances
+EASE_DECAY = 0.9            # every new appearance makes the older ones count 10% less
+EASE_WEIGHT_CAP = 6         # an appearance with this many guessers (or more) has full weight
+EASE_SPEEDRUN_FLOOR = 0.3   # speedrun: a word guessed in the very last second still scores this
+EASE_UP, EASE_UP_BACK = 0.65, 0.55        # medium -> easy at UP, easy -> medium below UP_BACK
+EASE_DOWN, EASE_DOWN_BACK = 0.25, 0.35    # medium -> hard at DOWN, hard -> medium above DOWN_BACK
+EASE_MIN_SHOWN = 2          # appearances before the level may change
+WORD_MAX_LEN = 40
+WORD_MAX_WORDS = 6
 CLOSE_NOTICES_PER_TURN = 2  # "you're close!" replies a player can get in one turn

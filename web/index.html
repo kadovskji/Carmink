@@ -16,12 +16,20 @@
 
   <div id="testbar" hidden></div>
 
+  <section id="dict" hidden></section>
+
   <main>
     <section id="msg" class="center"></section>
 
     <section id="choose" hidden>
       <h2 id="choose-title"></h2>
       <div id="choices"></div>
+      <button id="own-btn" type="button" hidden></button>
+      <form id="own" hidden autocomplete="off">
+        <input id="own-in" type="text" maxlength="90" enterkeyhint="send" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button id="own-ok" type="submit"></button>
+      </form>
+      <p id="own-msg" hidden></p>
     </section>
 
     <section id="board" hidden>

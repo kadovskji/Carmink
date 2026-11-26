@@ -12,10 +12,12 @@ import random
 from typing import Awaitable, Callable, Protocol
 
 import config
+import difficulty
 import strokes
 import words
 from broken import BrokenMixin
 from db import Database
+from dictionary import DictMixin
 from errors import GameError
 from game import (Game, Phase, Turn, drawer_points, guess_points, laps, ranking,
                   speedrun_drawer_points)
@@ -35,6 +37,7 @@ class IO(Protocol):
                          caption: str) -> None: ...
     async def delete(self, chat_id: int, message_id: int) -> None: ...
     async def is_admin(self, chat_id: int, user_id: int) -> bool: ...
+    async def is_member(self, chat_id: int, user_id: int) -> bool: ...
     async def can_delete(self, chat_id: int) -> bool: ...          # may the bot delete messages here?
     def schedule(self, name: str, delay: float, fn: Callable[[], Awaitable[None]]) -> None: ...
     def cancel(self, prefix: str) -> None: ...
@@ -42,6 +45,7 @@ class IO(Protocol):
     async def send_dm(self, user_id: int, text: str, buttons: list[Button] | None = None) -> bool: ...
     async def send_photo_dm(self, user_id: int, jpeg: bytes, caption: str) -> bool: ...
     async def send_animation(self, chat_id: int, data: bytes, caption: str) -> int | None: ...
+    async def send_document_dm(self, user_id: int, data: bytes, filename: str, caption: str) -> bool: ...
     async def edit_text(self, chat_id: int, message_id: int, text: str,
                         buttons: list[Button] | None = None) -> None: ...
 
@@ -64,7 +68,7 @@ def admin_button(lang: str) -> tuple[str, str]:
 
 def chat_from_param(param: str | None) -> int | None:
     """Mini App start parameter 'c1001234567' -> chat id -1001234567 ('t<id>': admin test match)."""
-    if param and param[0] == "c" and param[1:].isdigit():
+    if param and param[0] in "cd" and param[1:].isdigit():       # 'd': the dictionary page
         return -int(param[1:])
     if param and param[0] == "t" and param[1:].isdigit():
         return int(param[1:])
@@ -77,7 +81,7 @@ TEST_BASE = 9_000_000_000_000           # fake test players have ids far above a
 MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 
-class Engine(BrokenMixin):
+class Engine(BrokenMixin, DictMixin):
     def __init__(self, io: IO, db: Database, rng: random.Random | None = None) -> None:
         self.io = io
         self.db = db
@@ -93,6 +97,10 @@ class Engine(BrokenMixin):
         url = (f"https://t.me/{config.BOT_USERNAME}/{config.MINIAPP_SHORTNAME}"
                f"?startapp={param}")
         return url + "&mode=compact" if compact else url
+
+    def dict_link(self, chat_id: int) -> str:
+        """The group dictionary page of the Mini App."""
+        return f"https://t.me/{config.BOT_USERNAME}/{config.MINIAPP_SHORTNAME}?startapp=d{abs(chat_id)}"
 
     async def _tnotify(self, g: Game) -> None:
         if g.test and self.test_notify:
@@ -179,7 +187,9 @@ class Engine(BrokenMixin):
                 del self.user_game[uid]
 
     def words_for(self, chat_id: int, lang: str) -> list[words.Entry]:
-        return words.load(lang) + self.db.custom_entries(chat_id, lang)
+        """The group's dictionary (copied from the built-in one the first time it plays in this language)."""
+        self.db.ensure_dictionary(chat_id, lang)
+        return self.db.custom_entries(chat_id, lang)
 
     def _caption(self, g: Game) -> str:
         t = g.turn
@@ -345,7 +355,7 @@ class Engine(BrokenMixin):
     async def _begin(self, g: Game) -> None:
         if g.mode == "broken":
             return await self._bk_begin(g)
-        g.pool = self.words_for(g.chat_id, g.lang)
+        g.pool = words.load(g.lang) if g.test else self.words_for(g.chat_id, g.lang)
         order = list(g.players)
         self.rng.shuffle(order)
         g.queue = order * laps(len(order))
@@ -421,6 +431,7 @@ class Engine(BrokenMixin):
         else:
             header += "\n" + T(g.lang, "nobody_guessed")
         t.header = header + "\n\n" + self._board(g) + "\n\n"
+        self._learn(g, reason)
         if reason != "left" and t.drawer in g.players and (t.events or g.snapshot):
             # the picture in the chat must be the finished drawing: the drawer's Mini App, which
             # sees the round is over, sends the final canvas (or we use the last one after a moment)
@@ -428,6 +439,29 @@ class Engine(BrokenMixin):
             self._timer(g, "final", config.FINAL_SNAPSHOT_WAIT, self._final_timeout)
             return
         await self._show_final(g)
+
+    def _learn(self, g: Game, reason: str) -> None:
+        """How easily the word was guessed adjusts its level; a word the drawer wrote and somebody guessed
+        joins the group's dictionary. Only real rounds: somebody drew, at least two could guess."""
+        t = g.turn
+        if g.test or reason not in ("all", "time", "win") or t.drawer not in g.players \
+                or not (t.events or g.snapshot):
+            return
+        guessers = len(g.players) - 1
+        if guessers < 2:
+            return
+        solved = len(t.guessed)
+        share = (t.win_remaining or 0.0) / g.draw_seconds if g.mode == "speedrun" else 0.0
+        value = difficulty.ease(g.mode, solved, guessers, share, t.hints)
+        w = difficulty.weight(guessers)
+        if t.custom:
+            if not solved:
+                return
+            if self.db.count_custom(g.chat_id) < config.CUSTOM_WORDS_MAX and self.db.add_word(
+                    g.chat_id, g.lang, t.word.word, difficulty.first_level(value), t.drawer, t.word.alts,
+                    "custom", (w * value, w, 1)):
+                return
+        self.db.record_appearance(g.chat_id, g.lang, t.word.word, value, w)
 
     async def _final_timeout(self, g: Game) -> None:
         if g.turn and g.turn.final_open:
@@ -635,6 +669,7 @@ class Engine(BrokenMixin):
             if g.phase == Phase.CHOOSING:
                 out["choices"] = [{"i": i, "word": e.word, "diff": e.diff, "cat": e.cat}
                                   for i, e in enumerate(t.choices)]
+                out["own_word"] = {"extended": t.extended, "max": config.WORD_MAX_LEN}
             if t.word and g.phase in (Phase.STARTING, Phase.DRAWING):
                 out["word"] = t.word.word
                 out["penalty"] = int(config.HINT_PENALTY * 100)
@@ -644,7 +679,33 @@ class Engine(BrokenMixin):
         g, t = self._turn_of(chat_id, uid, Phase.CHOOSING)
         if not 0 <= index < len(t.choices):
             raise GameError("bad_choice")
-        t.word = t.choices[index]
+        self._take_word(g, t, t.choices[index])
+
+    def choose_more(self, chat_id: int, uid: int) -> None:
+        """The drawer taps "write your own": a little more time to type it (once)."""
+        g, t = self._turn_of(chat_id, uid, Phase.CHOOSING)
+        if t.extended:
+            return
+        t.extended = True
+        g.go(Phase.CHOOSING, config.CHOOSE_CUSTOM_SECONDS, self.io.now())
+        self._timer(g, "choose", config.CHOOSE_CUSTOM_SECONDS, self._choice_timeout)
+
+    def choose_custom(self, chat_id: int, uid: int, text: str) -> None:
+        """The drawer's own word or phrase ('word | synonym | ...'). A word the dictionary already has is
+        used as it is; a new one counts like a medium word and is kept if somebody guesses it."""
+        g, t = self._turn_of(chat_id, uid, Phase.CHOOSING)
+        parsed = words.parse_custom(text if isinstance(text, str) else "")
+        if not parsed:
+            raise GameError("bad_word")
+        word, alts = parsed
+        known = next((e for e in g.pool if words.compact(word) in e.forms()), None)
+        if known:
+            return self._take_word(g, t, known)
+        t.custom = True
+        self._take_word(g, t, words.Entry(word=word, alts=alts, diff=2, cat="custom"))
+
+    def _take_word(self, g: Game, t: Turn, entry: words.Entry) -> None:
+        t.word = entry
         positions = words.letter_positions(t.word.word)
         self.rng.shuffle(positions)
         t.reveal_order = positions

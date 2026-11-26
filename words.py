@@ -110,9 +110,9 @@ def load(lang: str) -> list[Entry]:
 
 
 def validate_custom(text: str) -> str | None:
-    """Clean a word suggested with /addword; None if it isn't acceptable."""
+    """Clean a word written by a player or an admin; None if it isn't acceptable."""
     word = " ".join(text.split())
-    if not 2 <= len(word) <= config.WORD_MAX_LEN or len(word.split()) > 3:
+    if not 2 <= len(word) <= config.WORD_MAX_LEN or len(word.split()) > config.WORD_MAX_WORDS:
         return None
     if not all(ch.isalpha() or ch in " '-" for ch in word):
         return None

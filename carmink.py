@@ -40,8 +40,6 @@ COMMANDS = [
     ("wait", "Extend sign-ups: /wait <minutes>", "Prolunga le iscrizioni: /wait <minuti>"),
     ("quit", "Leave the match", "Lascia la partita"),
     ("stop", "Cancel the match", "Annulla la partita"),
-    ("addword", "Add a word: /addword <word> [| synonym] [1-3]", "Aggiungi una parola: /addword <parola> [| sinonimo] [1-3]"),
-    ("deleteword", "Remove a word you added", "Togli una parola che hai aggiunto"),
     ("stats", "Group statistics", "Statistiche del gruppo"),
     ("mystats", "Your statistics", "Le tue statistiche"),
     ("settings", "Group settings (admins)", "Impostazioni del gruppo (admin)"),
@@ -69,8 +67,7 @@ def register(app: Application, h: Handlers, admin: Admin) -> None:
 
     for name, handler in (("start", h.start), ("help", h.help), ("newgame", h.newgame), ("join", h.join),
                           ("ready", h.ready), ("nextgame", h.nextgame), ("wait", h.wait), ("quit", h.quit),
-                          ("stop", h.stop), ("addword", h.addword),
-                          ("deleteword", h.deleteword), ("stats", h.stats),
+                          ("stop", h.stop), ("stats", h.stats),
                           ("mystats", h.mystats), ("settings", h.settings)):
         command(name, handler)
     app.add_handler(CommandHandler("admin", admin.admin, filters=filters.ChatType.PRIVATE))

@@ -188,7 +188,6 @@ def test_broken_canva_drawing_endpoints(env, client, monkeypatch):
 def test_broken_canva_text_through_the_mini_app(env, client):
     for uid in range(1, 5):
         env.db.add_dm(uid)
-    env.db.set_setting(env.CHAT, "cycles", "2")
     g = env.start_match(4, "it", "broken")
     st = client.get("/api/state", headers=hdr()).json()
     assert st["bk"]["kind"] == "text" and st["bk"]["active"] and not st["bk"]["done"]

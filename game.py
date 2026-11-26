@@ -36,6 +36,8 @@ class Turn:
     attempts: list[dict] = field(default_factory=list)    # classic: guesses typed in the Mini App
     last_attempt: dict[int, float] = field(default_factory=dict)
     chat_warned: set[int] = field(default_factory=set)
+    custom: bool = False       # the drawer wrote the word himself
+    extended: bool = False     # ... and asked for the extra time to type it
     final_open: bool = False    # round over, waiting for the drawer's finished canvas
     header: str = ""            # the round's result message, posted when the wait is over
 
@@ -65,8 +67,10 @@ class BrokenState:
 
 def broken_steps(n_players: int, cycles: int | None = None) -> int:
     """Passes after the phrase. A cycle is a phrase (or description) and its drawing, so `cycles`
-    cycles are 2 * cycles - 1 passes. Default: one cycle per player, at most BROKEN_MAX_CYCLES."""
-    c = cycles or min(n_players, config.BROKEN_MAX_CYCLES)
+    cycles are 2 * cycles - 1 passes. Nobody works on a chain twice, so there are at most
+    n_players - 1 passes (cycles <= n_players // 2). Default: as many as fit, at most BROKEN_MAX_CYCLES."""
+    fit = max(1, n_players // 2)
+    c = min(cycles or config.BROKEN_MAX_CYCLES, config.BROKEN_MAX_CYCLES, fit)
     return 2 * max(1, c) - 1
 
 
@@ -96,8 +100,8 @@ class Game:
     created_at: float = field(default_factory=time.time)
     started_at: float | None = None
     broken: BrokenState | None = None
+    cycles: int | None = None                  # Broken Canva cycles (None = as many as fit, see /settings)
     draw_seconds: int = config.DRAW_SECONDS    # drawing time of this match (see /settings)
-    cycles: int | None = None                  # Broken Canva cycles (None = one per player, see /settings)
     test: bool = False                          # admin test match: fake players, nothing saved
     test_ids: list[int] = field(default_factory=list)       # fake players, in order (Test 1, Test 2…)
 

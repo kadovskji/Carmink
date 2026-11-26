@@ -32,7 +32,7 @@ Needs 4+ players, and every player must have opened the bot in private first (th
 
 1. Everybody privately sends the bot a funny phrase (2 minutes, up to 120 characters; sending another replaces it). The group message shows who has written. Whoever sends nothing is dropped.
 2. Pass after pass, each player receives the last item of somebody else's chain: a phrase to **draw** in the Mini App (3 minutes by default, from receipt; the same `/settings` option, *Done* ends it early) or a drawing to **describe** (60 seconds), with a private message or from the text field under the canvas in the Mini App. A pass closes as soon as everybody has answered; a missing drawing becomes the last draft or a blank canvas, a missing description becomes "…".
-3. A *cycle* is a description and its drawing. `/settings` sets the number of cycles (default: one per player, max 5). With more cycles than other players you meet again chains you already worked on, evolved. Every chain ends with a drawing.
+3. A *cycle* is a description and its drawing. `/settings` sets the number of cycles (default: as many as fit, max 5). Everybody works on each chain only once, so there are at most *players − 1* passes and the cycles are capped at *players ÷ 2* (4–5 players: 2, 6–7: 3, 10+: 5): a higher setting is lowered to what fits. Every chain ends with a drawing.
 4. At the end the bot posts one GIF per chain (each frame has the caption and the drawing made from it, with both authors). It needs Pillow and a font (`fonts-dejavu-core`); without Pillow it posts a text recap.
 
 ### Points
@@ -43,7 +43,7 @@ Needs 4+ players, and every player must have opened the bot in private first (th
 | Drawer | Speedrun: up to 50 when the word is guessed at once, falling to 40% of that as the time runs out. Classic: 30 for every player who guessed, with the difficulty multiplier |
 | Hints | Every hint the drawer gives (max 3) cuts 20% of the points of the guesses that follow **and** of the drawer's own points |
 
-The words come from three categories: everyday objects and places, living things (animals, plants, body parts, mythical creatures), actions and emotions. The built-in dictionary is in `data/`; every group can add its own words.
+The words come from three categories: everyday objects and places, living things (animals, plants, body parts, mythical creatures), actions and emotions. The built-in dictionary is in `data/`; the first time a group plays in a language it is **copied into the group**, which from then on edits it freely (see *Group dictionary* below).
 
 Guesses ignore case, accents, spaces and punctuation, and accept the synonyms listed in the dictionary. A guess one typo away gets a "so close!" reply. Messages that contain the answer, written by the drawer or by someone who already guessed, are deleted.
 
@@ -60,11 +60,9 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed) |
 | `/quit` | Leave the match |
 | `/stop` | Cancel the match (its creator or a group admin) |
-| `/addword <word> [\| synonym \| ...] [1-3]` | Add a word to the group dictionary, with optional accepted synonyms (up to 5) and a difficulty (default 2). Example: `/addword scooter \| kick scooter 3` |
-| `/deleteword <word>` | Remove a word that was added with `/addword` |
 | `/stats` | Group statistics |
 | `/mystats` | Your statistics (this group, or all groups if used in private) |
-| `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match, drawing time, Broken Canva cycles |
+| `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match, drawing time, Broken Canva cycles, and the **📚 Dictionary** button |
 | `/admin` | **Bot owner only**, private chat only: announcements, restart, git pull, log, 🧪 test match. Not shown in the command menu |
 | `/t <n> <text>` | **Bot owner only**, private chat: during a test match, writes `<text>` as fake player *n* (guess in Speedrun/Classic, phrase or description in Broken Canva) |
 
@@ -82,11 +80,12 @@ One Python process runs the bot (long polling) and the Mini App backend, side by
 |---|---|
 | `carmink.py` | Entry point: bot + uvicorn in one event loop |
 | `engine.py` | The match: lobby, turns, timers, guesses, hints, scoring. It knows nothing about Telegram or HTTP |
-| `game.py`, `words.py` | Model and pure rules; dictionary, matching, hint masks |
+| `game.py`, `words.py`, `difficulty.py` | Model and pure rules; dictionary, matching, hint masks; adaptive difficulty |
+| `dictionary.py`, `dictio.py` | Group dictionary page: permissions and edits; export/import file, pasted list, share codes |
 | `broken.py`, `gifmaker.py` | Broken Canva: passes, private messages, drawings; GIF of every chain (Pillow) |
 | `handlers.py`, `tg_io.py`, `admin.py` | Telegram side: commands, messages and timers, `/admin` |
 | `webserver.py`, `auth.py` | Mini App API (Starlette) and validation of Telegram's `initData` |
-| `web/` | The Mini App: `index.html`, `app.js`, `fill.js`, `style.css` |
+| `web/` | The Mini App: `index.html`, `app.js` (game), `dict.js` (dictionary page), `fill.js`, `style.css` |
 | `db.py`, `i18n.py`, `config.py`, `logs.py` | SQLite, texts, settings and constants, logging |
 
 The server owns every rule and every timer; the Mini App only draws, sends the pictures, and shows what `/api/state` tells it. Matches live in memory: a restart ends the running ones. Everything in `config.py` (timings, points, snapshot rate) can be tuned.
@@ -132,6 +131,21 @@ Ports 80 and 443 must be open; the backend listens only on `127.0.0.1:8081`. It 
 About 450 words per language. The objects and living things come largely from the category names of Google's [Quick, Draw!](https://github.com/googlecreativelab/quickdraw-dataset) dataset (345 things that people could draw in 20 seconds, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), translated and sorted by difficulty; the actions and emotions, and the rest, were added by hand.
 
 `data/words_it.json` and `data/words_en.json`: category → difficulty (`"1"` easy, `"2"` medium, `"3"` hard) → list of words. A word can list accepted alternatives after `|` (`"frigorifero|frigo"`). The tests check that there are no duplicates and that every category/difficulty has enough words.
+
+## Group dictionary
+
+**Copy.** The first time a group plays in a language, the built-in dictionary is copied into the database for that group (`custom_words`); from then on the group's words are its own. Test matches use the built-in words and never touch this.
+
+**Adaptive difficulty** (`difficulty.py`, constants in `config.py`). After every real round (somebody drew, at least two could guess) the word gets an *ease* from 0 to 1: Classic, the share of guessers who got it; Speedrun, 0 if nobody did, otherwise 0.3–1 depending on how fast; discounted 20% per hint. A decaying weighted average, pulled towards what the word's starting level predicts (it counts as 3 rounds), estimates how easy it really is; the level moves to easy at ≥ 0.65 (back below 0.55) or to hard at ≤ 0.25 (back above 0.35), after at least 2 rounds. In practice a word needs about 5 rounds to change. A level an admin sets by hand is locked 🔒 and never adapted until they turn the automatic level back on.
+
+**Your own word.** In Speedrun and Classic the drawer can tap *✏️ Write your own word or phrase* next to the three words (2–40 characters, letters only, up to 6 words, synonyms with `word | synonym`). Tapping gives him 30 seconds instead of 10, once. A word the dictionary already has is used with its level; a new one scores like a medium word and joins the group's dictionary only if somebody guesses it, with the level that follows from how many did.
+
+**The page** (`/settings` → 📚 Dictionary, a Mini App page; admins, or every member if the group chose so): search, filter by level, add, edit (word, synonyms, level, automatic/locked) and delete words, per language. A group cannot go below 30 words per language.
+
+**Export and import.**
+- *File*: **Export** sends a `.json` with every word, its level and what the group learned about it, in private to whoever asks. **Import** takes that file, or a pasted list (`word | synonym | 2`, one per line).
+- *Code*: **Code** creates a short code (`XXXX-XXXX`, valid 24 hours, reusable) that another group's admin enters under **Import**: the quickest way to copy a dictionary from one group to another.
+- Import shows a preview first. Words the group already has are left alone, unless *update words already there* is ticked (then level, synonyms and statistics become the file's: tick it when importing into a group that has just started).
 
 ## Tests
 

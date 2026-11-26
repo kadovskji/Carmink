@@ -19,6 +19,8 @@ class FakeIO:
         self.edits: list[dict] = []
         self.deleted: list[int] = []
         self.admins: set[int] = set()
+        self.members: set[int] = set()
+        self.documents: list[dict] = []
         self.timers: dict[str, tuple[float, object]] = {}
         self._next_id = 100
         self.dms: list[dict] = []
@@ -77,6 +79,15 @@ class FakeIO:
 
     async def is_admin(self, chat_id, user_id):
         return user_id in self.admins
+
+    async def is_member(self, chat_id, user_id):
+        return user_id in self.admins or user_id in self.members
+
+    async def send_document_dm(self, user_id, data, filename, caption):
+        if user_id in self.dm_fail:
+            return False
+        self.documents.append({"user": user_id, "data": data, "filename": filename, "caption": caption})
+        return True
 
     def schedule(self, name, delay, fn):
         self.timers[name] = (self.t + delay, fn)

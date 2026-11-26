@@ -49,9 +49,9 @@ def test_validate_custom_word():
     assert words.validate_custom("  orso   polare ") == "orso polare"
     assert words.validate_custom("l'ape") == "l'ape"
     assert words.validate_custom("x") is None
-    assert words.validate_custom("tre quattro cinque sei") is None
+    assert words.validate_custom("uno due tre quattro cinque sei sette") is None
     assert words.validate_custom("abc123") is None
-    assert words.validate_custom("a" * 31) is None
+    assert words.validate_custom("a" * 41) is None
 
 
 @pytest.mark.parametrize("lang", words.LANGUAGES)

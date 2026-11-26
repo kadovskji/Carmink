@@ -8,6 +8,15 @@
     tg.expand();
     try { tg.disableVerticalSwipes(); } catch (e) { /* older clients */ }
   }
+  // opened from /settings -> Dictionary (start parameter d<chat>): another page, see dict.js
+  const startParam = (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || new URLSearchParams(location.search).get("tgWebAppStartParam") || "";
+  if (/^d\d+$/.test(startParam)) {
+    document.body.classList.add("dictmode");
+    const s = document.createElement("script");
+    s.src = "dict.js";
+    document.body.appendChild(s);
+    return;
+  }
   // read when needed: on some desktop clients the data is not there yet at the very first moment
   const getInit = () => (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || "";
   const $ = (id) => document.getElementById(id);
@@ -22,6 +31,10 @@
       nextYou: "Tocca a te! Prepara la matita: {s}s",
       choosingOther: "{name} sta scegliendo la parola… {s}s",
       pick: "Scegli la parola",
+      own: "✏️ Scrivi la tua parola o frase",
+      ownPh: "Parola o frase da disegnare…",
+      ownOk: "Scegli",
+      ownBad: "Non valida: 2-40 caratteri, solo lettere, al massimo 6 parole.",
       diff: ["Facile", "Media", "Difficile"],
       startOther: "{name} sta per iniziare a disegnare…",
       startYou: "Inizia a disegnare entro {s}s: il tempo parte dal primo tratto",
@@ -57,6 +70,10 @@
       nextYou: "It's your turn! Get ready: {s}s",
       choosingOther: "{name} is picking a word… {s}s",
       pick: "Pick a word",
+      own: "✏️ Write your own word or phrase",
+      ownPh: "Word or phrase to draw…",
+      ownOk: "Pick",
+      ownBad: "Not valid: 2-40 characters, letters only, at most 6 words.",
       diff: ["Easy", "Medium", "Hard"],
       startOther: "{name} is about to start drawing…",
       startYou: "Start drawing within {s}s: the clock starts at your first stroke",
@@ -183,6 +200,7 @@
     // phrases and descriptions, which can also be sent to the bot in private
     const guessOn = (attOn && !drawer && st.in_game) || (st.mode === "speedrun" && viewOn && st.in_game) || bkText;
     show("choose", drawer && phase === "choosing");
+    if (!(drawer && phase === "choosing")) ownOpen = false;
     show("board", canvasOn || viewOn || bkText);
     show("stage", !bkText || bkImg);
     show("tools", canvasOn);
@@ -227,7 +245,37 @@
     tick();
   }
 
+  let ownOpen = false;
+  function renderOwn() {
+    const can = st.mode !== "broken" && !!st.own_word;
+    $("own-btn").textContent = t("own");
+    $("own-in").placeholder = t("ownPh");
+    $("own-ok").textContent = t("ownOk");
+    show("own-btn", can && !ownOpen);
+    show("own", can && ownOpen);
+    if (!ownOpen) show("own-msg", false);
+  }
+  $("own-btn").addEventListener("click", async () => {
+    ownOpen = true;
+    renderOwn();
+    $("own-in").focus();
+    api("choose_more", "POST", {}).then(refresh);        // a little more time to type
+  });
+  $("own").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("own-in").value.trim();
+    if (!text) return;
+    try {
+      const res = await api("choose_custom", "POST", { text });
+      if (res.ok) { $("own-in").value = ""; ownOpen = false; renderOwn(); await refresh(); return; }
+      const j = await res.json().catch(() => ({}));
+      if (j.error === "bad_word") { $("own-msg").textContent = t("ownBad"); show("own-msg", true); }
+      else await refresh();
+    } catch (err) { /* offline: try again */ }
+  });
+
   function renderChoices() {
+    renderOwn();
     const key = JSON.stringify(st.choices);
     if (key === choicesKey) return;
     choicesKey = key;

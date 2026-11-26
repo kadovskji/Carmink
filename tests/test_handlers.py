@@ -126,60 +126,16 @@ def test_guesses_reach_the_engine(env, h):
     assert 77 in env.io.deleted and env.game.scores[guesser] > 0
 
 
-def test_addword_permissions_validation_and_dictionary(env, h):
-    run(env, h.newgame(upd()[0], ctx()))            # lang it
-    u, m = upd(2, "Bob")
-    run(env, h.addword(u, ctx("zattera")))
-    assert "admin" in m.replies[-1]
-    env.io.admins.add(2)
-    run(env, h.addword(u, ctx("orso", "polare", "3")))
-    assert "orso polare" in m.replies[-1] and "difficoltà 3" in m.replies[-1]
-    run(env, h.addword(u, ctx("Orso", "Polare")))
-    assert "già nel dizionario" in m.replies[-1]
-    run(env, h.addword(u, ctx("12345")))
-    assert "non valida" in m.replies[-1]
-    run(env, h.addword(u, ctx()))
-    assert "Uso:" in m.replies[-1]
-    assert [e.word for e in env.db.custom_entries(CHAT, "it")] == ["orso polare"]
-    run(env, h.deleteword(u, ctx("ORSO", "polare")))
-    assert "tolta" in m.replies[-1] and not env.db.custom_entries(CHAT, "it")
-    run(env, h.deleteword(u, ctx("cane")))
-    assert "non è nel dizionario" in m.replies[-1]
-
-
-def test_addword_with_synonyms(env, h):
-    run(env, h.newgame(upd()[0], ctx()))
-    env.io.admins.add(2)
-    u, m = upd(2, "Bob")
-    run(env, h.addword(u, ctx("monopattino", "|", "scooter", "|", "Kick", "scooter", "|", "monopattino", "3")))
-    assert "Sinonimi accettati: scooter, Kick scooter" in m.replies[-1] and "difficoltà 3" in m.replies[-1]
-    (e,) = env.db.custom_entries(CHAT, "it")
-    assert e.word == "monopattino" and e.alts == ("scooter", "Kick scooter") and e.diff == 3
-    from words import is_correct
-    assert is_correct(e, "SCOOTER") and is_correct(e, "kickscooter")
-    # a synonym that already exists elsewhere in the dictionary is accepted
-    run(env, h.addword(u, ctx("seggiolone", "|", "sedia")))
-    assert "aggiunta" in m.replies[-1]
-    run(env, h.addword(u, ctx("|", "xx")))
-    assert "non valida" in m.replies[-1]
-    run(env, h.addword(u, ctx("cane", "|", "12")))
-    assert "non valida" in m.replies[-1]
-
-
-def test_dictionary_open_to_everyone_when_the_group_chooses_so(env, h):
-    env.db.set_setting(CHAT, "words", "everyone")
-    u, m = upd(9, "Zed")
-    run(env, h.addword(u, ctx("zattera")))
-    assert "aggiunta" in m.replies[-1]
-
-
-def test_custom_dictionary_limit(env, h, monkeypatch):
-    monkeypatch.setattr(config, "CUSTOM_WORDS_MAX", 1)
-    env.db.set_setting(CHAT, "words", "everyone")
+def test_settings_menu_has_the_dictionary_button_and_no_word_commands(env, h):
+    env.io.admins.add(1)
     u, m = upd()
-    run(env, h.addword(u, ctx("uno")))
-    run(env, h.addword(u, ctx("due")))
-    assert "pieno" in m.replies[-1]
+    run(env, h.settings(u, ctx()))
+    _, kb = h._menu(CHAT)
+    rows = getattr(kb, "inline_keyboard", None) or kb.args[0]          # real markup, or the stand-in
+    urls = [getattr(b, "url", None) or b.kw.get("url") for row in rows for b in row]
+    urls = [u for u in urls if u]
+    assert urls and urls[-1].endswith("?startapp=d1001")
+    assert not hasattr(h, "addword") and not hasattr(h, "deleteword")
 
 
 def test_stats_after_a_finished_match(env, h):
@@ -217,7 +173,7 @@ def test_settings_menu_text(env, h):
 def test_help_in_group_and_private(env, h):
     u, m = upd()
     run(env, h.help(u, ctx()))
-    assert "/addword" in m.replies[-1] and "/help" in m.replies[-1]
+    assert "Dizionario" in m.replies[-1] and "/help" in m.replies[-1] and "/addword" not in m.replies[-1]
 
 
 def test_newgame_offers_the_three_modes_and_only_the_creator_picks(env, h):

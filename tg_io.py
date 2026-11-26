@@ -114,6 +114,23 @@ class TelegramIO:
             return False
         return member.status in ("administrator", "creator")
 
+    async def is_member(self, chat_id, user_id):
+        try:
+            member = await self.app.bot.get_chat_member(chat_id, user_id)
+        except TelegramError:
+            return False
+        return member.status in ("member", "administrator", "creator") or \
+            (member.status == "restricted" and bool(getattr(member, "is_member", False)))
+
+    async def send_document_dm(self, user_id, data, filename, caption) -> bool:
+        try:
+            await self.app.bot.send_document(user_id, document=InputFile(data, filename=filename),
+                                             caption=caption, parse_mode="HTML")
+            return True
+        except TelegramError as e:
+            LOG.info("private document to %s failed: %s", user_id, e)
+            return False
+
     def schedule(self, name: str, delay: float, fn: Callable[[], Awaitable[None]]) -> None:
         for job in self.app.job_queue.get_jobs_by_name(name):
             job.schedule_removal()
