@@ -148,10 +148,26 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
             return JSONResponse({"error": "bad_image"}, status_code=413)
         data = await request.body()
         if request.url.path.endswith("/submit"):
-            await engine.bk_submit(chat_id, uid, data)
+            n = request.query_params.get("n", "")
+            await engine.bk_submit(chat_id, uid, data, int(n) if n.isdigit() else 0)
         else:
             engine.bk_draft(chat_id, uid, data)
         return JSONResponse({"ok": True})
+
+    async def cs_act(request, chat_id, uid):
+        """Code Stroke from the Mini App: pick a word or pass."""
+        g = engine.games.get(chat_id)
+        if not g or g.mode != "codestroke":
+            return JSONResponse({"error": "no_game"}, status_code=409)
+        if request.url.path.endswith("/pass"):
+            note = await engine.cs_pass(g, uid)
+        else:
+            try:
+                index = int((await request.json())["index"])
+            except (ValueError, KeyError, TypeError):
+                return JSONResponse({"error": "bad_request"}, status_code=400)
+            note = await engine.cs_pick(g, uid, index)
+        return JSONResponse({"ok": note is None, "note": note})
 
     async def bk_text(request, chat_id, uid):
         try:
@@ -223,6 +239,8 @@ def create_app(engine: Engine, bot_token: str, static_dir: Path = config.WEB_DIR
         Route("/api/bk/draft", api(bk_image), methods=["POST"]),
         Route("/api/bk/submit", api(bk_image), methods=["POST"]),
         Route("/api/bk/text", api(bk_text), methods=["POST"]),
+        Route("/api/cs/pick", api(cs_act), methods=["POST"]),
+        Route("/api/cs/pass", api(cs_act), methods=["POST"]),
         Route("/api/bk/given", api(bk_given)),
         Mount("/", StaticFiles(directory=static_dir, html=True)),
     ]

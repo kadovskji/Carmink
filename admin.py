@@ -329,7 +329,9 @@ class Admin:
                 rows = [[InlineKeyboardButton(f"{emoji} {name}", callback_data=f"ad:testmode:{mode}")]
                         for mode, emoji, name in (("speedrun", "⚡", "Speedrun"),
                                                   ("classic", "🎨", "Classica"),
-                                                  ("broken", "📞", "Broken Canva"))]
+                                                  ("broken", "📞", "Broken Canva"),
+                                                  ("carmeleon", "🦎", "Carmeleon (beta)"),
+                                                  ("codestroke", "🕵️", "Code Stroke (beta)"))]
                 rows.append([InlineKeyboardButton("⬅️ Menu", callback_data="ad:menu")])
                 await q.edit_message_text(
                     "🧪 Partita di test: tu interpreti tutti i giocatori.\nScegli la modalità.",
@@ -339,7 +341,8 @@ class Admin:
             mode = action.split(":", 1)[1]
             if mode not in config.MODES_AVAILABLE:
                 return
-            lo = config.MIN_PLAYERS_BROKEN if mode == "broken" else config.MIN_PLAYERS
+            lo = {"broken": config.MIN_PLAYERS_BROKEN, "carmeleon": config.MIN_PLAYERS_CARMELEON,
+                  "codestroke": config.MIN_PLAYERS_CODESTROKE}.get(mode, config.MIN_PLAYERS)
             row = [InlineKeyboardButton(str(n), callback_data=f"ad:testgo:{mode}:{n}")
                    for n in range(lo, 9)]
             await q.edit_message_text(
@@ -356,7 +359,8 @@ class Admin:
                 return
             await q.edit_message_text(
                 "🧪 Partita di test avviata.\n/c = pannello con i pulsanti (indovina, frase, disegno…)\n"
-                "/t N testo = scrive come Test N\nMini App: scegli il giocatore dalla barra gialla.",
+                "/t N testo = scrive come Test N (Carmeleon e Code Stroke: /t N cm:v:3, cm:more, cs:g:7, cs:pass…)\n"
+                "Mini App: scegli il giocatore dalla barra gialla.",
                 reply_markup=self._back())
             await self.engine.new_test_game(uid, "it", mode, int(n))
 

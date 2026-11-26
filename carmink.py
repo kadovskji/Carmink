@@ -76,6 +76,7 @@ def register(app: Application, h: Handlers, admin: Admin) -> None:
 
     app.add_handler(CallbackQueryHandler(h.cb_settings, pattern=r"^s:"))
     app.add_handler(CallbackQueryHandler(h.cb_mode, pattern=r"^m:"))
+    app.add_handler(CallbackQueryHandler(h.cb_party, pattern=r"^(cm|cs):"))
     app.add_handler(CallbackQueryHandler(admin.callback, pattern=r"^ad:"))
 
     app.add_handler(MessageHandler(filters.ChatType.GROUPS, h.track_group), group=-2)

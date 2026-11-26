@@ -6,13 +6,15 @@ import config
 import difficulty
 import words
 
-DEFAULT_SETTINGS = {"lang": "it", "words": "admins", "latejoin": "on", "drawtime": "auto", "cycles": "auto"}
+DEFAULT_SETTINGS = {"lang": "it", "words": "admins", "latejoin": "on", "drawtime": "auto", "cycles": "auto",
+                    "cmwords": str(config.CARMELEON_DEFAULT_WORDS)}
 ALLOWED_SETTINGS = {
     "lang": ("it", "en"),
     "words": ("admins", "everyone"),    # who can edit the group dictionary
     "latejoin": ("on", "off"),          # may players join a running speedrun / classic match?
     "drawtime": ("auto",) + tuple(str(s) for s in config.DRAW_CHOICES),   # seconds per drawing
     "cycles": ("auto",) + tuple(str(c) for c in range(1, config.BROKEN_MAX_CYCLES + 1)),  # Broken Canva
+    "cmwords": tuple(str(n) for n in config.CARMELEON_WORDS),   # Carmeleon: words on the table
 }
 
 SCHEMA = """
@@ -22,7 +24,8 @@ CREATE TABLE IF NOT EXISTS chat_settings (
     words TEXT NOT NULL DEFAULT 'admins',
     latejoin TEXT NOT NULL DEFAULT 'on',
     drawtime TEXT NOT NULL DEFAULT 'auto',
-    cycles TEXT NOT NULL DEFAULT 'auto');
+    cycles TEXT NOT NULL DEFAULT 'auto',
+    cmwords TEXT NOT NULL DEFAULT '15');
 CREATE TABLE IF NOT EXISTS known_chats (        -- groups where the bot is (or was) present
     chat_id INTEGER PRIMARY KEY,
     title TEXT,
@@ -78,6 +81,8 @@ class Database:
             self.con.execute("ALTER TABLE chat_settings ADD COLUMN drawtime TEXT NOT NULL DEFAULT 'auto'")
         if "cycles" not in scols:
             self.con.execute("ALTER TABLE chat_settings ADD COLUMN cycles TEXT NOT NULL DEFAULT 'auto'")
+        if "cmwords" not in scols:
+            self.con.execute("ALTER TABLE chat_settings ADD COLUMN cmwords TEXT NOT NULL DEFAULT '15'")
         if "alts" not in cols:                  # database created before synonyms existed
             self.con.execute("ALTER TABLE custom_words ADD COLUMN alts TEXT NOT NULL DEFAULT ''")
         for name, ddl in (("cat", "TEXT NOT NULL DEFAULT 'other'"), ("base", "INTEGER NOT NULL DEFAULT 0"),

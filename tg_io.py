@@ -11,6 +11,21 @@ from telegram.ext import Application
 LOG = logging.getLogger("carmink.tg")
 
 
+def _button(label: str, target: str) -> InlineKeyboardButton:
+    """A link button; a target that starts with "cb:" is a callback button instead (the party modes)."""
+    if target.startswith("cb:"):
+        return InlineKeyboardButton(label, callback_data=target[3:])
+    return InlineKeyboardButton(label, url=target)
+
+
+def keyboard(buttons) -> InlineKeyboardMarkup | None:
+    """buttons: a list whose items are (label, target) - one button per row - or a list of them (a row)."""
+    if not buttons:
+        return None
+    rows = [[_button(*b) for b in item] if isinstance(item, list) else [_button(*item)] for item in buttons]
+    return InlineKeyboardMarkup(rows)
+
+
 class TelegramIO:
     def __init__(self, app: Application) -> None:
         self.app = app
@@ -19,8 +34,7 @@ class TelegramIO:
         return time.time()
 
     async def send(self, chat_id, text, buttons=None, reply_to=None):
-        markup = InlineKeyboardMarkup([[InlineKeyboardButton(label, url=url)]
-                                       for label, url in buttons]) if buttons else None
+        markup = keyboard(buttons)
         reply = ReplyParameters(message_id=reply_to, allow_sending_without_reply=True) \
             if reply_to else None
         try:
@@ -33,8 +47,7 @@ class TelegramIO:
 
     @staticmethod
     def _markup(buttons):
-        return InlineKeyboardMarkup([[InlineKeyboardButton(label, url=url)]
-                                     for label, url in buttons]) if buttons else None
+        return keyboard(buttons)
 
     async def send_dm(self, user_id, text, buttons=None) -> bool:
         """A private message; False if the user never started the bot (or blocked it)."""
@@ -72,10 +85,10 @@ class TelegramIO:
         except TelegramError as e:      # "message is not modified", flood limits...
             LOG.info("edit of message %s in %s skipped: %s", message_id, chat_id, e)
 
-    async def send_photo(self, chat_id, jpeg, caption):
+    async def send_photo(self, chat_id, jpeg, caption, buttons=None):
         try:
             msg = await self.app.bot.send_photo(chat_id, photo=jpeg, caption=caption,
-                                                parse_mode="HTML")
+                                                parse_mode="HTML", reply_markup=keyboard(buttons))
             return msg.message_id
         except TelegramError as e:
             LOG.warning("send_photo to %s failed: %s", chat_id, e)

@@ -4,7 +4,7 @@ A Telegram party game bot where players take turns drawing a word while everybod
 
 ## How a match works
 
-1. Somebody sends `/newgame` and picks the **mode** with the buttons (only the creator can pick); the others `/join`. At least 3 players are needed (4 for Broken Canva); `/ready` starts right away, otherwise the match starts when the sign-up window (5 minutes, extendable with `/wait`) closes.
+1. Somebody sends `/newgame` and picks the **mode** with the buttons (only the creator can pick); the others `/join`. At least 3 players are needed (4 for Broken Canva, Carmeleon and Code Stroke); `/ready` starts right away, otherwise the match starts when the sign-up window (5 minutes, extendable with `/wait`) closes.
 2. Every player draws in turn. With fewer than 5 players everybody draws **twice** (3 players → 6 rounds, 4 → 8); with 5 or more, once.
 3. Each turn:
 
@@ -25,6 +25,8 @@ A Telegram party game bot where players take turns drawing a word while everybod
 | 🔥 Speedrun | available | Guesses are typed in the chat. The first correct guess wins the round |
 | 🕹️ Classic | available | Guesses are typed in the Mini App (everybody sees everybody's attempts live) and the others keep trying after somebody got it |
 | ☎️ Broken Canva | available | Telephone game of phrases and drawings, nobody wins; the bot builds a GIF of every chain (see below) |
+| 🦎 Carmeleon | **beta** | Everybody knows the key word except the Chameleon: draw something linked to it, then vote (see below) |
+| 🕵️ Code Stroke | **beta** | Two teams, a 5×5 grid of words, spy masters who give clues by drawing (see below) |
 
 #### Broken Canva
 
@@ -34,6 +36,23 @@ Needs 4+ players, and every player must have opened the bot in private first (th
 2. Pass after pass, each player receives the last item of somebody else's chain: a phrase to **draw** in the Mini App (3 minutes by default, from receipt; the same `/settings` option, *Done* ends it early) or a drawing to **describe** (60 seconds), with a private message or from the text field under the canvas in the Mini App. A pass closes as soon as everybody has answered; a missing drawing becomes the last draft or a blank canvas, a missing description becomes "…".
 3. A *cycle* is a description and its drawing. `/settings` sets the number of cycles (default: as many as fit, max 5). Everybody works on each chain only once, so there are at most *players − 1* passes and the cycles are capped at *players ÷ 2* (4–5 players: 2, 6–7: 3, 10+: 5): a higher setting is lowered to what fits. Every chain ends with a drawing.
 4. At the end the bot posts one GIF per chain (each frame has the caption and the drawing made from it, with both authors). It needs Pillow and a font (`fonts-dejavu-core`); without Pillow it posts a text recap.
+
+#### Carmeleon (beta)
+
+4+ players, nobody can join once it has started. The table has 15, 21 or 30 words (`/settings`, default 15) from three different categories of the group's dictionary; one of them is the **key**. Everybody sees the key in the Mini App except one random player, the **Chameleon**.
+
+1. In turn (random order, 90 s by default, the *Drawing time* setting) everybody draws something linked to the key in the Mini App; every drawing is posted in the chat at once. The *Table* tab shows the words (and the key) without losing the drawing.
+2. When everybody has drawn, the group votes with two buttons in the chat: another lap (only once, majority needed) or the vote.
+3. The vote: the bot posts every player's drawing with a button under it (you can't vote for yourself). A tie, or a wrong most-voted player, means the Chameleon wins and the key is revealed (**3 points**).
+4. If the Chameleon is the most voted it can still win by naming the key among the table words (buttons, only the Chameleon can press): then it wins alone (**2 points**). Otherwise every other player gets **2 points**.
+
+#### Code Stroke (beta)
+
+4+ players, nobody can join once it has started, split into two teams: 🔵 blue starts (9 words) and 🔴 red follows (8 words); with an odd number of players red gets the extra one. The 5×5 grid has the team words, 7 neutral words and one assassin ⬛; the words come from the whole group dictionary (all levels).
+
+- Each team has a random **spy master**, the only one who sees the key (Mini App). It draws a clue and picks a number (1–9, the *Number* menu next to *Done*); the drawing is posted in the chat with the number.
+- The teammates tap words, in the chat (25 buttons) or in the *Grid* tab of the Mini App, up to *number + 1* tries, with *Pass* after at least one word. A word of the other team or a neutral one ends the turn (the other team's words still count for them); the assassin makes the team lose at once; the first team that finds all its words wins (1 point each, the win counts in the statistics).
+- No clue within the drawing time, or no pick within 2 minutes: the turn passes.
 
 ### Points
 
@@ -64,7 +83,7 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 | `/mystats` | Your statistics (this group, or all groups if used in private) |
 | `/settings` | Group settings for admins: language, who can edit the dictionary, whether players can join a running match, drawing time, Broken Canva cycles, and the **📚 Dictionary** button |
 | `/admin` | **Bot owner only**, private chat only: announcements, restart, git pull, log, 🧪 test match. Not shown in the command menu |
-| `/t <n> <text>` | **Bot owner only**, private chat: during a test match, writes `<text>` as fake player *n* (guess in Speedrun/Classic, phrase or description in Broken Canva) |
+| `/t <n> <text>` | **Bot owner only**, private chat: during a test match, writes `<text>` as fake player *n* (guess in Speedrun/Classic, phrase or description in Broken Canva, a button's data such as `cm:v:3` or `cs:pass` in Carmeleon and Code Stroke) |
 
 ## The canvas (Mini App)
 
@@ -82,6 +101,7 @@ One Python process runs the bot (long polling) and the Mini App backend, side by
 | `engine.py` | The match: lobby, turns, timers, guesses, hints, scoring. It knows nothing about Telegram or HTTP |
 | `game.py`, `words.py`, `difficulty.py` | Model and pure rules; dictionary, matching, hint masks; adaptive difficulty |
 | `dictionary.py`, `dictio.py` | Group dictionary page: permissions and edits; export/import file, pasted list, share codes |
+| `carmeleon.py`, `codestroke.py` | The two beta party modes (state in `game.py`, strings in `i18n_party.py`, tests in `tests/test_party.py`) |
 | `broken.py`, `gifmaker.py` | Broken Canva: passes, private messages, drawings; GIF of every chain (Pillow) |
 | `handlers.py`, `tg_io.py`, `admin.py` | Telegram side: commands, messages and timers, `/admin` |
 | `webserver.py`, `auth.py` | Mini App API (Starlette) and validation of Telegram's `initData` |

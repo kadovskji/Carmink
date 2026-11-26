@@ -466,7 +466,7 @@ def test_old_database_gets_the_latejoin_column(tmp_path):
     con.commit(); con.close()
     db = Database(p)
     assert db.get_settings(1) == {"lang": "en", "words": "everyone", "latejoin": "on", "drawtime": "auto",
-                                 "cycles": "auto"}
+                                 "cycles": "auto", "cmwords": "15"}
     assert db.set_setting(1, "latejoin", "off") and db.get_settings(1)["latejoin"] == "off"
 
 

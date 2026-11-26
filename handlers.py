@@ -104,6 +104,17 @@ class Handlers:
         self.db.track_chat(chat_id, getattr(q.message.chat, "title", None))
         await self.engine.new_game(chat_id, owner, q.from_user.first_name, lang, mode)
 
+    async def cb_party(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Buttons of Carmeleon and Code Stroke (votes, grid, pass)."""
+        q = update.callback_query
+        try:
+            note = await self.engine.on_callback(q.message.chat_id, q.from_user.id, q.data or "",
+                                                 q.from_user.first_name)
+        except Exception:                           # a button must never leave the player waiting
+            LOG.exception("party callback %s failed", q.data)
+            note = None
+        await q.answer(note or None)
+
     async def join(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if await self._group(update):
             chat, user = update.effective_chat, update.effective_user

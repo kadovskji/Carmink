@@ -16,6 +16,8 @@ import difficulty
 import strokes
 import words
 from broken import BrokenMixin
+from carmeleon import CarmeleonMixin
+from codestroke import CodeStrokeMixin
 from db import Database
 from dictionary import DictMixin
 from errors import GameError
@@ -25,14 +27,15 @@ from i18n import T, dur
 
 LOG = logging.getLogger("carmink.game")
 
-Button = tuple[str, str]        # (label, url)
+Button = tuple[str, str]        # (label, url); a url "cb:<data>" makes a callback button; a list of them is a row
 
 
 class IO(Protocol):
     def now(self) -> float: ...
     async def send(self, chat_id: int, text: str, buttons: list[Button] | None = None,
                    reply_to: int | None = None) -> int | None: ...
-    async def send_photo(self, chat_id: int, jpeg: bytes, caption: str) -> int | None: ...
+    async def send_photo(self, chat_id: int, jpeg: bytes, caption: str,
+                         buttons: list | None = None) -> int | None: ...
     async def edit_photo(self, chat_id: int, message_id: int, jpeg: bytes | None,
                          caption: str) -> None: ...
     async def delete(self, chat_id: int, message_id: int) -> None: ...
@@ -81,7 +84,7 @@ TEST_BASE = 9_000_000_000_000           # fake test players have ids far above a
 MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 
-class Engine(BrokenMixin, DictMixin):
+class Engine(BrokenMixin, CarmeleonMixin, CodeStrokeMixin, DictMixin):
     def __init__(self, io: IO, db: Database, rng: random.Random | None = None) -> None:
         self.io = io
         self.db = db
@@ -115,7 +118,8 @@ class Engine(BrokenMixin, DictMixin):
         """A match in the admin's private chat with `n` fake players he plays by himself."""
         if admin in self.games:
             return None
-        n = max(3 if mode != "broken" else config.MIN_PLAYERS_BROKEN, min(n, 8))
+        n = max({"broken": config.MIN_PLAYERS_BROKEN, "carmeleon": config.MIN_PLAYERS_CARMELEON,
+                 "codestroke": config.MIN_PLAYERS_CODESTROKE}.get(mode, 3), min(n, 8))
         base = TEST_BASE + (admin % 10**7) * 100
         ids = [base + i for i in range(1, n + 1)]
         names = {u: f"Test {i}" for i, u in enumerate(ids, 1)}
@@ -124,7 +128,7 @@ class Engine(BrokenMixin, DictMixin):
         g = Game(chat_id=admin, lang=lang, creator=ids[0], mode=mode, players=dict(names),
                  names=dict(names), lobby_end=self.io.now(), test=True, test_ids=ids,
                  draw_seconds=config.DRAW_DEFAULTS[mode] if chosen == "auto" else int(chosen),
-                 cycles=None if st["cycles"] == "auto" else int(st["cycles"]))
+                 cycles=None if st["cycles"] == "auto" else int(st["cycles"]), cm_words=int(st["cmwords"]))
         self.games[admin] = g
         for u in ids:
             self.user_game[u] = admin
@@ -148,6 +152,8 @@ class Engine(BrokenMixin, DictMixin):
             return f"Giocatore {n} inesistente (1-{len(g.test_ids)})."
         uid = g.test_ids[n - 1]
         try:
+            if g.mode in config.PARTY_MODES:
+                return await self.on_callback(admin, uid, text.strip())
             if g.mode == "broken":
                 if not await self.on_private(uid, text):
                     return f"Test {n}: ora non deve scrivere nulla."
@@ -220,7 +226,7 @@ class Engine(BrokenMixin, DictMixin):
         g = Game(chat_id=chat_id, lang=lang, creator=uid, mode=mode, players={uid: name},
                  names={uid: name}, lobby_end=self.io.now() + config.LOBBY_SECONDS,
                  draw_seconds=config.DRAW_DEFAULTS[mode] if chosen == "auto" else int(chosen),
-                 cycles=None if st["cycles"] == "auto" else int(st["cycles"]))
+                 cycles=None if st["cycles"] == "auto" else int(st["cycles"]), cm_words=int(st["cmwords"]))
         self.games[chat_id] = g
         self.user_game[uid] = chat_id
         self._timer(g, "lobby", config.LOBBY_SECONDS, self._lobby_expired)
@@ -229,8 +235,10 @@ class Engine(BrokenMixin, DictMixin):
                  time=fmt_duration(config.LOBBY_SECONDS))
         if mode == "broken":
             text += "\n\n" + T(lang, "bk_lobby_note")
+        elif mode in config.PARTY_MODES:
+            text += "\n\n" + T(lang, f"{mode}_lobby_note")
         await self.io.send(chat_id, text, self._start_button(g) if mode == "broken" else None)
-        if mode != "broken" and not await self.io.can_delete(chat_id):
+        if mode in ("speedrun", "classic") and not await self.io.can_delete(chat_id):
             await self.io.send(chat_id, T(lang, "need_admin_note"), [admin_button(lang)])
         await self._notify_nextgame(g)
 
@@ -268,6 +276,8 @@ class Engine(BrokenMixin, DictMixin):
                 return await self._say(chat_id, g.lang, "join_closed_broken")
             if not self.db.has_dm(uid):
                 return await self._need_dm(chat_id, g.lang)
+        elif g.mode in config.PARTY_MODES and g.phase != Phase.LOBBY:
+            return await self._say(chat_id, g.lang, "join_closed_party")
         elif g.phase != Phase.LOBBY and self.db.get_settings(chat_id)["latejoin"] == "off":
             return await self._say(chat_id, g.lang, "join_closed")
         g.players[uid] = g.names[uid] = name
@@ -333,6 +343,10 @@ class Engine(BrokenMixin, DictMixin):
             elif uid == g.creator:
                 g.creator = next(iter(g.players))
             return
+        if g.mode == "carmeleon":
+            return await self.cm_left(g, uid)
+        if g.mode == "codestroke":
+            return await self.cs_left(g, uid)
         if len(g.players) < config.MIN_PLAYERS_TO_CONTINUE:
             return await self._finish(g, T(g.lang, "too_few") + "\n\n")
         if g.mode == "broken":
@@ -355,6 +369,10 @@ class Engine(BrokenMixin, DictMixin):
     async def _begin(self, g: Game) -> None:
         if g.mode == "broken":
             return await self._bk_begin(g)
+        if g.mode == "carmeleon":
+            return await self._cm_begin(g)
+        if g.mode == "codestroke":
+            return await self._cs_begin(g)
         g.pool = words.load(g.lang) if g.test else self.words_for(g.chat_id, g.lang)
         order = list(g.players)
         self.rng.shuffle(order)
@@ -498,6 +516,18 @@ class Engine(BrokenMixin, DictMixin):
         LOG.info("game in %s over after %d turns", g.chat_id, g.turn_no)
         self._close(g)
         await self.io.send(g.chat_id, text)
+
+    # ================================================================ buttons under the messages of the party modes
+    async def on_callback(self, chat_id: int, uid: int, data: str, name: str = "") -> str | None:
+        """A callback button (cm:… Carmeleon, cs:… Code Stroke). Returns a short note for the player, if any."""
+        g = self.games.get(chat_id)
+        if not g or g.phase == Phase.LOBBY:
+            return None
+        if data.startswith("cm:") and g.mode == "carmeleon":
+            return await self.cm_callback(g, uid, data)
+        if data.startswith("cs:") and g.mode == "codestroke":
+            return await self.cs_callback(g, uid, data)
+        return None
 
     # ================================================================ guesses (group chat)
     def _award(self, g: Game, uid: int) -> int:
@@ -650,6 +680,10 @@ class Engine(BrokenMixin, DictMixin):
             out["ends_in"] = max(0.0, g.deadline - self.io.now())
         if g.mode == "broken":
             return self._bk_web_state(g, uid, out)
+        if g.mode == "carmeleon":
+            return self._cm_web_state(g, uid, out)
+        if g.mode == "codestroke":
+            return self._cs_web_state(g, uid, out)
         t = g.turn
         if not t or g.phase == Phase.LOBBY:
             return out

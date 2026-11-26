@@ -66,9 +66,9 @@ class FakeIO:
     async def edit_text(self, chat_id, message_id, text, buttons=None):
         self.text_edits.append({"id": message_id, "text": text, "buttons": buttons})
 
-    async def send_photo(self, chat_id, jpeg, caption):
+    async def send_photo(self, chat_id, jpeg, caption, buttons=None):
         mid = self._id()
-        self.photos.append({"id": mid, "chat": chat_id, "jpeg": jpeg, "caption": caption})
+        self.photos.append({"id": mid, "chat": chat_id, "jpeg": jpeg, "caption": caption, "buttons": buttons})
         return mid
 
     async def edit_photo(self, chat_id, message_id, jpeg, caption):

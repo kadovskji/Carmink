@@ -209,6 +209,11 @@ class BrokenMixin:
 
     def bk_draft(self, chat_id: int, uid: int, data: bytes) -> None:
         """The Mini App saves the drawing now and then: it's used if the time runs out."""
+        g = self.games.get(chat_id)
+        if g and g.mode == "carmeleon":
+            return self.cm_draft(g, uid, data)
+        if g and g.mode == "codestroke":
+            return self.cs_draft(g, uid, data)
         g, bk = self._bk_draw_ctx(chat_id, uid)
         data = self._bk_jpeg(data)
         now = self.io.now()
@@ -217,7 +222,12 @@ class BrokenMixin:
         bk.last_draft[uid] = now
         bk.drafts[uid] = data
 
-    async def bk_submit(self, chat_id: int, uid: int, data: bytes) -> None:
+    async def bk_submit(self, chat_id: int, uid: int, data: bytes, number: int = 0) -> None:
+        g = self.games.get(chat_id)
+        if g and g.mode == "carmeleon":
+            return await self.cm_submit(g, uid, data)
+        if g and g.mode == "codestroke":
+            return await self.cs_submit(g, uid, data, number)
         g, bk = self._bk_draw_ctx(chat_id, uid)
         data = self._bk_jpeg(data)
         if uid in bk.inbox:

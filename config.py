@@ -39,8 +39,10 @@ FEW_PLAYERS = 5             # below this many players everybody draws twice (so:
 MIN_PLAYERS_TO_CONTINUE = 2  # a running match ends if fewer players are left
 
 # ---------------------------------------------------------------- game modes
-MODES = ("speedrun", "classic", "broken")
-MODES_AVAILABLE = ("speedrun", "classic", "broken")
+MODES = ("speedrun", "classic", "broken", "carmeleon", "codestroke")
+MODES_AVAILABLE = MODES
+BETA_MODES = ("carmeleon", "codestroke")     # shown with a "beta" label
+PARTY_MODES = BETA_MODES                    # nobody can join once the match has started
 DEFAULT_MODE = "speedrun"
 
 # ---------------------------------------------------------------- Broken Canva
@@ -53,6 +55,20 @@ BROKEN_TEXT_MAX = 120
 BROKEN_JPEG_MAX = 600_000
 BROKEN_GIF_GAP = 1.0        # pause between two GIFs sent to the group (Telegram flood limits)
 
+# ---------------------------------------------------------------- Carmeleon (beta)
+MIN_PLAYERS_CARMELEON = 4
+CARMELEON_WORDS = (15, 21, 30)      # words on the table (3 categories); /settings picks one
+CARMELEON_DEFAULT_WORDS = 15
+CARMELEON_DECIDE_SECONDS = 30       # "another lap or vote?"
+CARMELEON_VOTE_SECONDS = 60
+CARMELEON_GUESS_SECONDS = 45        # the unmasked chameleon tries to name the key word
+CARMELEON_POINTS = {"hidden": 3, "guessed": 2, "caught": 2}   # chameleon not caught / caught but guessed / each innocent when caught
+
+# ---------------------------------------------------------------- Code Stroke (beta)
+MIN_PLAYERS_CODESTROKE = 4
+CODESTROKE_GUESS_SECONDS = 120      # the team's time to pick words after a clue
+CODESTROKE_BLUE, CODESTROKE_RED, CODESTROKE_NEUTRAL = 9, 8, 7     # blue starts: one more word
+
 # ---------------------------------------------------------------- timings, in seconds
 LOBBY_SECONDS = 300         # sign-up window
 NEXTGAME_HOURS = 24         # /nextgame requests expire after this long
@@ -61,7 +77,7 @@ BREAK_SECONDS = 10          # pause between two turns (the next drawer is announ
 CHOOSE_SECONDS = 10         # the drawer must pick one of the three words
 START_SECONDS = 20          # then must start drawing; otherwise the turn is skipped
 DRAW_CHOICES = (60, 90, 120, 180, 240, 300)     # what /settings offers for the drawing time
-DRAW_DEFAULTS = {"speedrun": 120, "classic": 120, "broken": 180}   # the group setting "auto"
+DRAW_DEFAULTS = {"speedrun": 120, "classic": 120, "broken": 180, "carmeleon": 90, "codestroke": 120}   # the group setting "auto"
 DRAW_SECONDS = DRAW_DEFAULTS["classic"]   # fallback; a match has its own `draw_seconds`
 
 # ---------------------------------------------------------------- points

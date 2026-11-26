@@ -75,6 +75,57 @@ def broken_steps(n_players: int, cycles: int | None = None) -> int:
 
 
 @dataclass
+class CarmeleonState:
+    """Carmeleon: one word of the table is the key; everybody knows it but the chameleon. Everybody draws
+    something linked to it (in turn); then the players vote for the chameleon."""
+    table: list[Entry]
+    key: int                                    # index in table
+    chameleon: int
+    order: list[int]
+    stage: str = "draw"                         # draw | decide | vote | guess
+    lap: int = 1                                # 1, or 2 if the group asked for another lap
+    pos: int = 0                                # whose turn it is in order
+    drawings: list[dict] = field(default_factory=list)      # {"uid", "lap", "jpeg"} in the order they were handed in
+    draft: bytes | None = None                  # the current drawer's latest draft (used if time runs out)
+    last_draft: float = 0.0
+    more: dict[int, bool] = field(default_factory=dict)     # "another lap?" votes
+    votes: dict[int, int] = field(default_factory=dict)     # voter -> suspect
+    vote_msgs: dict[int, int] = field(default_factory=dict)  # suspect -> message id with the drawing and the button
+    guess_msg: int | None = None
+    started_at: float = 0.0
+
+    @property
+    def current(self) -> int:
+        return self.order[self.pos]
+
+
+@dataclass
+class CodeStrokeState:
+    """Code Stroke: a 5x5 grid of words and two teams. Each team's spy master draws a clue and a number;
+    the others tap the words they think belong to the team."""
+    grid: list[Entry]
+    key: list[str]                              # per cell: "B" blue, "R" red, "N" neutral, "K" assassin
+    teams: dict[int, str]                       # user id -> "B" / "R"
+    spies: dict[str, int]                       # team -> spy master
+    revealed: list[bool] = field(default_factory=lambda: [False] * 25)
+    team: str = "B"                             # the team playing now (blue starts)
+    stage: str = "clue"                         # clue | guess
+    number: int = 0
+    guesses_left: int = 0
+    guessed_now: int = 0                        # words picked in this turn
+    draft: bytes | None = None
+    last_draft: float = 0.0
+    grid_msg: int | None = None
+    clue_no: int = 0
+    turn_no: int = 0                            # team turns so far (the Mini App resets its canvas on a new one)
+    winner: str | None = None
+    ended_by: str = ""                          # "words" | "assassin"
+
+    def left(self, team: str) -> int:
+        return sum(1 for k, r in zip(self.key, self.revealed) if k == team and not r)
+
+
+@dataclass
 class Game:
     chat_id: int
     lang: str
@@ -100,6 +151,9 @@ class Game:
     created_at: float = field(default_factory=time.time)
     started_at: float | None = None
     broken: BrokenState | None = None
+    cm: CarmeleonState | None = None
+    cs: CodeStrokeState | None = None
+    cm_words: int = config.CARMELEON_DEFAULT_WORDS
     cycles: int | None = None                  # Broken Canva cycles (None = as many as fit, see /settings)
     draw_seconds: int = config.DRAW_SECONDS    # drawing time of this match (see /settings)
     test: bool = False                          # admin test match: fake players, nothing saved
@@ -107,7 +161,8 @@ class Game:
 
     @property
     def min_players(self) -> int:
-        return config.MIN_PLAYERS_BROKEN if self.mode == "broken" else config.MIN_PLAYERS
+        return {"broken": config.MIN_PLAYERS_BROKEN, "carmeleon": config.MIN_PLAYERS_CARMELEON,
+                "codestroke": config.MIN_PLAYERS_CODESTROKE}.get(self.mode, config.MIN_PLAYERS)
 
     def name(self, uid: int) -> str:
         return self.players.get(uid) or self.names.get(uid, "?")

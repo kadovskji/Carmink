@@ -41,12 +41,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "🎨 <b>Carmink</b>: disegna, gli altri indovinano!\n\n"
               "A turno uno disegna la parola scelta tra tre (tempo dal primo tratto, regolabile in /settings: 2 minuti di default), gli altri indovinano "
               "(in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; chi disegna ne prende di più se indovinano in tanti, "
-              "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori (4 per Broken Canva, il telefono senza fili di frasi e disegni).\n\n"
+              "e può dare indizi al costo di qualche punto. Servono almeno 3 giocatori (4 per Broken Canva, Carmeleon e Code Stroke).\n\n"
               "<b>Modalità</b> (le sceglie chi usa /newgame)\n"
               "🔥 <b>Speedrun</b>: si indovina in chat, il primo che indovina vince il round.\n"
               "🕹️ <b>Classica</b>: si indovina nella Mini App e tutti continuano a provare.\n"
               "☎️ <b>Broken Canva</b>: telefono senza fili; ognuno scrive in privato una frase, poi frasi e disegni passano di mano in mano. "
-              "Nessun vincitore, alla fine arrivano le GIF. Servono 4 giocatori che abbiano avviato il bot in privato.\n\n"
+              "Nessun vincitore, alla fine arrivano le GIF. Servono 4 giocatori che abbiano avviato il bot in privato.\n"
+              "🦎 <b>Carmeleon</b> (beta): tutti conoscono la parola chiave tranne il Camaleonte. A turno si disegna qualcosa di collegato (Mini App), poi si vota chi è il Camaleonte con i pulsanti in chat; se lo scoprono può ancora vincere indovinando la parola. Non ci si unisce a partita avviata.\n"
+              "🕵️ <b>Code Stroke</b> (beta): due squadre, una griglia 5×5 di parole; i capi spia vedono la chiave e danno un indizio disegnato con un numero, i compagni toccano le parole. Attenti all'assassino!\n\n"
               "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
               "<b>Avviso</b>\n/nextgame: ti scrivo in privato quando si apre la prossima partita (24 ore, dovrai comunque fare /join; rimandalo per annullare)\n"
               "<b>Dizionario del gruppo</b>\nIn /settings → 📚 Dizionario: aggiungi, modifica, esporta e importa le parole. Se il disegnatore scrive una parola sua e qualcuno la indovina, entra nel dizionario.\n"
@@ -54,12 +56,14 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
               "Players take turns drawing a word picked among three (time counted from the first stroke, adjustable in /settings: 2 minutes by default) while the others "
               "guess in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
-              "many players guess, and can give hints at the cost of some points. At least 3 players are needed (4 for Broken Canva, the telephone game of phrases and drawings).\n\n"
+              "many players guess, and can give hints at the cost of some points. At least 3 players are needed (4 for Broken Canva, Carmeleon and Code Stroke).\n\n"
               "<b>Modes</b> (picked by whoever uses /newgame)\n"
               "🔥 <b>Speedrun</b>: guess in the chat, the first to guess wins the round.\n"
               "🕹️ <b>Classic</b>: guess in the Mini App, everybody keeps trying.\n"
               "☎️ <b>Broken Canva</b>: telephone game; everybody privately writes a phrase, then phrases and drawings are passed around. "
-              "Nobody wins, GIFs come at the end. Needs 4 players who have started the bot in private.\n\n"
+              "Nobody wins, GIFs come at the end. Needs 4 players who have started the bot in private.\n"
+              "🦎 <b>Carmeleon</b> (beta): everybody knows the key word except the Chameleon. Take turns drawing something linked to it (Mini App), then vote for the Chameleon with the buttons in the chat; if unmasked it can still win by naming the word. No joining once started.\n"
+              "🕵️ <b>Code Stroke</b> (beta): two teams, a 5×5 grid of words; the spy masters see the key and give a drawn clue with a number, teammates tap the words. Beware of the assassin!\n\n"
               "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
               "<b>Notice</b>\n/nextgame: I message you in private when the next match opens (24 hours, you still have to /join; send it again to cancel)\n"
               "<b>Group dictionary</b>\nIn /settings → 📚 Dictionary: add, edit, export and import words. If the drawer writes a word of his own and somebody guesses it, it joins the dictionary.\n"
@@ -82,11 +86,15 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "Scegli la modalità, <b>{name}</b>:\n"
               "🔥 <b>Speedrun</b>: indovini in chat, il primo che indovina vince il round.\n"
               "🕹️ <b>Classica</b>: si indovina nella Mini App e tutti possono continuare a provare.\n"
-              "☎️ <b>Broken Canva</b>: telefono senza fili di frasi e disegni, nessun vincitore.",
+              "☎️ <b>Broken Canva</b>: telefono senza fili di frasi e disegni, nessun vincitore.\n"
+              "🦎 <b>Carmeleon</b> (beta): chi è il Camaleonte che non conosce la parola? "
+              "🕵️ <b>Code Stroke</b> (beta): due squadre e indizi disegnati.",
         "en": "Pick the mode, <b>{name}</b>:\n"
               "🔥 <b>Speedrun</b>: guess in the chat, the first to guess wins the round.\n"
               "🕹️ <b>Classic</b>: guess in the Mini App, everybody keeps trying.\n"
-              "☎️ <b>Broken Canva</b>: telephone game of phrases and drawings, nobody wins.",
+              "☎️ <b>Broken Canva</b>: telephone game of phrases and drawings, nobody wins.\n"
+              "🦎 <b>Carmeleon</b> (beta): who is the Chameleon that doesn't know the word? "
+              "🕵️ <b>Code Stroke</b> (beta): two teams and drawn clues.",
     },
     "mode_soon": {"it": "Questa modalità arriva presto.", "en": "This mode is coming soon."},
     "mode_only_creator": {"it": "Solo chi ha usato /newgame può scegliere.", "en": "Only whoever used /newgame can choose."},
@@ -333,3 +341,7 @@ STRINGS.update({
         "it": "⚠️ Per Speedrun e Classica mi serve essere amministratore con il permesso di eliminare i messaggi: altrimenti le risposte esatte restano visibili e potrei non vedere i tentativi.",
         "en": "⚠️ For Speedrun and Classic I need to be an admin with the permission to delete messages: otherwise correct answers stay visible and I may not see the guesses."},
 })
+
+from i18n_party import STRINGS as _PARTY  # noqa: E402
+
+STRINGS.update(_PARTY)

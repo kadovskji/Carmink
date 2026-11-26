@@ -15,6 +15,7 @@
       denied: "Non puoi modificare il dizionario di questo gruppo.", load: "Caricamento…",
       lvl: ["Facile", "Media", "Difficile"], newWord: "Nuova parola o frase", edit: "Modifica",
       category: "Categoria", cats: { animals: "Animali e creature", nature: "Natura e ambienti", plants: "Piante", body: "Corpo e abbigliamento", food: "Cibi e bevande", people: "Mestieri e personaggi", places: "Edifici e monumenti", vehicles: "Veicoli", objects: "Oggetti e dispositivi", actions: "Azioni ed emozioni", sport: "Sport e giochi", music: "Musica e strumenti", other: "Altro" },
+      noCat: "✨ Senza categoria", sortBtn: "Smista", sortTitle: "Smista le parole", sortLeft: "{n} da smistare", skip: "Salta", sortDone: "Tutte smistate 🎉",
       word: "Parola o frase", alts: "Sinonimi (separati da virgola)", level: "Difficoltà", auto: "Livello automatico",
       autoHelp: "Il livello si adatta a quanti la indovinano. Se lo cambi a mano resta fisso finché non riattivi l'automatico.",
       save: "Salva", del: "Elimina", sure: "Tocca ancora per eliminare", cancel: "Chiudi",
@@ -37,6 +38,7 @@
       denied: "You can't edit this group's dictionary.", load: "Loading…",
       lvl: ["Easy", "Medium", "Hard"], newWord: "New word or phrase", edit: "Edit",
       category: "Category", cats: { animals: "Animals & creatures", nature: "Nature & places", plants: "Plants", body: "Body & clothing", food: "Food & drinks", people: "Jobs & characters", places: "Buildings & landmarks", vehicles: "Vehicles", objects: "Objects & devices", actions: "Actions & emotions", sport: "Sports & games", music: "Music & instruments", other: "Other" },
+      noCat: "✨ Uncategorised", sortBtn: "Sort", sortTitle: "Sort the words", sortLeft: "{n} left", skip: "Skip", sortDone: "All sorted 🎉",
       word: "Word or phrase", alts: "Synonyms (comma separated)", level: "Difficulty", auto: "Automatic level",
       autoHelp: "The level follows how many players guess it. If you change it by hand it stays fixed until you turn automatic back on.",
       save: "Save", del: "Delete", sure: "Tap again to delete", cancel: "Close",
@@ -83,7 +85,7 @@
     } catch (e) { return { ok: false, error: "network" }; }
   }
 
-  let data = null, dictLang = null, query = "", level = 0, flashTimer = null;
+  let data = null, dictLang = null, query = "", level = 0, noCat = false, flashTimer = null;
 
   function flash(text, bad) {
     const f = document.getElementById("dflash");
@@ -110,7 +112,7 @@
 
   function visible() {
     const q = query.trim().toLowerCase();
-    return data.words.filter((w) => (!level || w.d === level) &&
+    return data.words.filter((w) => (!level || w.d === level) && (!noCat || w.cat === "other") &&
       (!q || w.w.toLowerCase().includes(q) || w.alts.some((a) => a.toLowerCase().includes(q))));
   }
 
@@ -129,6 +131,7 @@
         <button data-lv="0" class="${!level ? "on" : ""}">${t("all")}</button>
         ${[1, 2, 3].map((l) => `<button data-lv="${l}" class="${level === l ? "on" : ""}">${DOT[l - 1]} ${t("lvl")[l - 1]}</button>`).join("")}
       </div>
+      ${uncategorised() ? `<div class="dchips"><button id="dnocat" class="${noCat ? "on" : ""}">${t("noCat")} (${uncategorised()})</button>${noCat ? `<button id="dsort" class="main">${t("sortBtn")}</button>` : ""}</div>` : ""}
       <div id="dflash" hidden></div>
       <div id="dlist"></div>
       <footer class="dfoot">
@@ -138,6 +141,32 @@
       </footer>
       <div id="dsheet" hidden></div>`;
     renderList();
+  }
+
+  const uncategorised = () => data.words.filter((w) => w.cat === "other").length;
+
+  function sortSheet(skipped) {
+    const left = data.words.filter((w) => w.cat === "other" && !skipped.includes(w.w));
+    if (!left.length) { closeSheet(); load(); flash(t("sortDone")); return; }
+    const w = left[0];
+    const cats = data.cats.filter((c) => c !== "other");
+    openSheet(`
+      <h3>${t("sortTitle")}</h3>
+      <small>${t("sortLeft", { n: left.length })}</small>
+      <div class="dsortw">${esc(w.w)}${w.alts.length ? `<small>${esc(w.alts.join(", "))}</small>` : ""}</div>
+      <div class="dsortg">${cats.map((c) => `<button data-sc="${c}">${ICON[c] || ""} ${esc(t("cats")[c] || c)}</button>`).join("")}</div>
+      <p id="serr" class="bad" hidden></p>
+      <div class="dbtns"><button id="sskip">${t("skip")}</button><button id="sclose">${t("cancel")}</button></div>`);
+    const s = sheet();
+    s.querySelectorAll("[data-sc]").forEach((b) => b.addEventListener("click", async () => {
+      const res = await api("dict/edit", "POST", { lang: dictLang, word: w.w, new: w.w, alts: w.alts, diff: w.d,
+        cat: b.dataset.sc, lock: w.lock });
+      if (!res.ok) { const e = document.getElementById("serr"); e.textContent = err(res.error, res); e.hidden = false; return; }
+      w.cat = b.dataset.sc;                       // keep the local copy in step: the next word comes up at once
+      sortSheet(skipped);
+    }));
+    document.getElementById("sskip").addEventListener("click", () => sortSheet([...skipped, w.w]));
+    document.getElementById("sclose").addEventListener("click", async () => { closeSheet(); await load(); });
   }
 
   function renderList() {
@@ -283,13 +312,15 @@
   root.addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;
-    if (b.dataset.lang) { dictLang = b.dataset.lang; query = ""; level = 0; await load(); }
+    if (b.dataset.lang) { dictLang = b.dataset.lang; query = ""; level = 0; noCat = false; await load(); }
     else if (b.dataset.lv !== undefined && b.closest(".dchips")) {
       level = Number(b.dataset.lv);
       root.querySelectorAll(".dchips button").forEach((x) => x.classList.toggle("on", x === b));
       renderList();
     } else if (b.classList.contains("drow")) editSheet(data.words.find((w) => w.w === b.dataset.w));
     else if (b.id === "dadd") editSheet(null);
+    else if (b.id === "dnocat") { noCat = !noCat; render(); }
+    else if (b.id === "dsort") sortSheet([]);
     else if (b.id === "dimport") importSheet(false);
     else if (b.id === "dcode") codeSheet();
     else if (b.id === "dexport") {

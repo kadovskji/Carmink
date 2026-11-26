@@ -61,6 +61,13 @@
       bkWait: "Fatto! Aspettiamo gli altri… {s}s",
       bkOut: "Questo giro guardi: non sei tra i giocatori.",
       bkDone: "✅ Fatto",
+      tabDraw: "🎨 Disegno", tabCm: "📋 Tabella", tabCs: "🔲 Griglia",
+      cmKey: "🔑 La parola chiave è:", cmChameleon: "🦎 Sei il Camaleonte! Non conosci la parola chiave: mimetizzati.",
+      cmViewer: "Stai guardando la partita.", cmTurn: "Tocca a {name} disegnare… {s}s", cmDecide: "Decidete in chat: un altro giro o si vota? {s}s",
+      cmVote: "Si vota in chat 🗳 {s}s", cmGuess: "Il Camaleonte prova a indovinare la parola chiave… {s}s", cmWait: "Un attimo…",
+      csBlue: "Blu", csRed: "Rossa", csSpy: "🕵️ Sei il capo spia: vedi la chiave.", csMate: "Tocca le parole della tua squadra.", csViewer: "Stai guardando la partita.",
+      csClue: "{team} · {name} disegna l'indizio… {s}s", csGuess: "{team} · indizio {n}, tentativi rimasti: {left} · {s}s",
+      csPass: "⏭ Passa", csLeft: "Mancano: 🔵 {b} · 🔴 {r}", csOver: "Partita finita.", numLabel: "N°",
     },
     en: {
       none: "No match running in this group.",
@@ -100,6 +107,13 @@
       bkWait: "Done! Waiting for the others… {s}s",
       bkOut: "You are only watching: you are not one of the players.",
       bkDone: "✅ Done",
+      tabDraw: "🎨 Drawing", tabCm: "📋 Table", tabCs: "🔲 Grid",
+      cmKey: "🔑 The key word is:", cmChameleon: "🦎 You are the Chameleon! You don't know the key word: blend in.",
+      cmViewer: "You are watching the match.", cmTurn: "{name} is drawing… {s}s", cmDecide: "Decide in the chat: another lap or vote? {s}s",
+      cmVote: "Voting in the chat 🗳 {s}s", cmGuess: "The Chameleon is trying to name the key word… {s}s", cmWait: "One moment…",
+      csBlue: "Blue", csRed: "Red", csSpy: "🕵️ You are the spy master: you see the key.", csMate: "Tap your team's words.", csViewer: "You are watching the match.",
+      csClue: "{team} · {name} is drawing the clue… {s}s", csGuess: "{team} · clue {n}, guesses left: {left} · {s}s",
+      csPass: "⏭ Pass", csLeft: "Left: 🔵 {b} · 🔴 {r}", csOver: "Match over.", numLabel: "No.",
     },
   };
   let lang = "it";
@@ -143,6 +157,10 @@
     } catch (e) { /* offline for a moment: keep trying */ }
   }
   function poll() { refresh().finally(() => setTimeout(poll, st.role === "drawer" && st.phase === "drawing" ? 400 : 1000)); }
+
+  const party = () => st.mode === "carmeleon" || st.mode === "codestroke";
+  const bkLike = () => st.mode === "broken" || party();
+  let view = "pad", viewTurn = null;       // party modes: the table / grid, or the canvas (which keeps its drawing)
 
   // ------------------------------------------------------------------ rendering
   const secs = () => Math.max(0, Math.ceil((endsAt - performance.now()) / 1000));
@@ -189,9 +207,15 @@
     }
 
     const phase = st.phase, drawer = st.role === "drawer";
-    const broken = st.mode === "broken", bkDraw = bkDrawNow(), bkText = bkTextNow();
+    const broken = bkLike(), bkDraw = bkDrawNow(), bkText = bkTextNow();
+    const hasPad = party() && !!(st.cm || st.cs);
+    if (hasPad) {
+      if (viewTurn !== turnKey) { viewTurn = turnKey; view = bkDraw ? "draw" : "pad"; }
+      if (!bkDraw) view = "pad";
+    }
+    const padOn = hasPad && view === "pad";
     const bkImg = bkText && !!st.bk.image;
-    const canvasOn = (drawer && (phase === "starting" || phase === "drawing")) || bkDraw;
+    const canvasOn = ((drawer && (phase === "starting" || phase === "drawing")) || bkDraw) && !padOn;
     const viewOn = !drawer && !broken && phase === "drawing";
     $("hint").hidden = broken; $("skip").hidden = broken; $("bkdone").hidden = !broken;
     $("bkdone").textContent = t("bkDone");
@@ -202,6 +226,12 @@
     show("choose", drawer && phase === "choosing");
     if (!(drawer && phase === "choosing")) ownOpen = false;
     show("board", canvasOn || viewOn || bkText);
+    show("pad", padOn);
+    show("tabs", hasPad && bkDraw);
+    $("tab-draw").textContent = t("tabDraw"); $("tab-pad").textContent = t(st.mode === "carmeleon" ? "tabCm" : "tabCs");
+    $("tab-draw").classList.toggle("on", view === "draw"); $("tab-pad").classList.toggle("on", view === "pad");
+    show("numsel", canvasOn && !!(st.bk && st.bk.number));
+    if (canvasOn && st.bk && st.bk.number) fillNumSel();
     show("stage", !bkText || bkImg);
     show("tools", canvasOn);
     show("attempts", attOn);
@@ -212,13 +242,14 @@
     document.body.classList.toggle("has-tools", canvasOn);
     document.body.classList.toggle("has-att", attOn && drawer);
     document.body.classList.toggle("has-guess", guessOn);
-    show("msg", !(canvasOn || viewOn || bkText || (drawer && phase === "choosing")));
+    show("msg", !(canvasOn || viewOn || bkText || padOn || (drawer && phase === "choosing")));
     const inp = $("guess");
     inp.maxLength = bkText ? (st.bk.max || 120) : 60;
     inp.placeholder = bkText ? t(bkImg ? "bkDescribePh" : "bkPhrasePh") : t("guessPh");
     if (bkText) $("word").textContent = t(bkImg ? "bkDescribeTitle" : "bkPhraseTitle");
     if (bkImg) loadGiven();
-    if (broken && st.bk) $("info").textContent = st.bk.step ? t("bkStep", { n: st.bk.step, total: st.bk.steps }) : t("bkPhrase");
+    if (padOn) $("info").textContent = party() && st.cs ? t("csLeft", { b: st.cs.blue, r: st.cs.red }) : "🦎 Carmeleon";
+    else if (st.mode === "broken" && st.bk) $("info").textContent = st.bk.step ? t("bkStep", { n: st.bk.step, total: st.bk.steps }) : t("bkPhrase");
     else $("info").textContent = st.turn ? t("round", { n: st.turn, total: st.turns }) : "Carmink";
 
     msgFn = null;
@@ -230,7 +261,7 @@
     } else if (phase === "choosing" && !drawer) msgFn = () => t("choosingOther", { name: st.drawer, s: secs() });
     else if (phase === "starting" && !drawer) msgFn = () => t("startOther", { name: st.drawer });
     else if (phase === "done") msgFn = () => t("timeUp");
-    else if (broken && st.bk && !bkDraw) {
+    else if (st.mode === "broken" && st.bk && !bkDraw) {
       if (!st.bk.active) msgFn = () => t("bkOut");
       else if (st.bk.done) msgFn = () => t("bkWait", { s: secs() });
       else msgFn = () => t(st.bk.kind === "draw" ? "bkWait" : (phase === "writing" ? "bkWrite" : "bkDescribe"), { s: secs() });
@@ -240,7 +271,8 @@
     if (drawer && phase === "choosing") renderChoices();
     fitLayout();
     if (st.final && drawer) sendFinal();
-    if (bkDraw) renderBkBoard();
+    if (padOn) renderPad();
+    if (canvasOn && bkDraw) renderBkBoard();
     else if (canvasOn || viewOn) renderBoard(drawer, phase);
     tick();
   }
@@ -331,12 +363,53 @@
   }
 
   function bkDrawNow() {
-    const b = st.mode === "broken" ? st.bk : null;
+    const b = bkLike() ? st.bk : null;
     return !!(b && st.phase === "step" && b.kind === "draw" && b.active && !b.done && b.prompt != null);
   }
   function renderBkBoard() {
-    $("word").innerHTML = `${t("draw")} <b>${esc(st.bk.prompt)}</b>`;
+    $("word").innerHTML = st.bk.raw ? `<b>${esc(st.bk.prompt)}</b>` : `${t("draw")} <b>${esc(st.bk.prompt)}</b>`;
   }
+
+  // ------------------------------------------------------------------ party modes: table / grid
+  function fillNumSel() {
+    const sel = $("numsel");
+    if (sel.options.length) return;
+    for (let i = 1; i <= 9; i++) { const o = document.createElement("option"); o.value = String(i); o.textContent = t("numLabel") + " " + i; sel.appendChild(o); }
+    sel.value = "2";
+  }
+  function renderPad() {
+    const el = $("pad");
+    const s = secs();
+    if (st.cm) {
+      const c = st.cm, cats = [...new Set(c.table.map((e) => e.cat))];
+      let top = c.me === "chameleon" ? t("cmChameleon") : c.me === "knows" ? t("cmKey") + " <b>" + esc(c.table[c.key].w) + "</b>" : t("cmViewer");
+      let sub = c.stage === "draw" ? t("cmTurn", { name: c.current, s }) : c.stage === "decide" ? t("cmDecide", { s })
+        : c.stage === "vote" ? t("cmVote", { s }) : c.stage === "guess" ? t("cmGuess", { s }) : t("cmWait");
+      el.innerHTML = `<p class="padtop">${top}</p><p class="padsub">${esc(sub)}</p>` + cats.map((cat) =>
+        `<div class="cmcat"><b>${ICON[cat] || ""}</b> ` + c.table.map((e, i) => e.cat === cat
+          ? `<span class="cmword${c.key === i ? " key" : ""}">${esc(e.w)}${c.key === i ? " 🔑" : ""}</span>` : "").join("") + `</div>`).join("");
+      return;
+    }
+    const c = st.cs, teamName = (x) => (x === "B" ? "🔵 " + t("csBlue") : "🔴 " + t("csRed"));
+    const mine = c.me ? teamName(c.me) + " · " : "";
+    const top = c.stage === "over" ? t("csOver") : c.spy ? t("csSpy") : c.me ? t("csMate") : t("csViewer");
+    const sub = c.stage === "clue" ? t("csClue", { team: teamName(c.team), name: c.spies[c.team], s })
+      : c.stage === "guess" ? t("csGuess", { team: teamName(c.team), n: c.number, left: c.left, s }) : "";
+    el.innerHTML = `<p class="padtop">${esc(mine)}${esc(top)}</p><p class="padsub">${esc(sub)}</p><div class="csgrid">` +
+      c.grid.map((g, i) => `<button type="button" class="cscell${g.k ? " k" + g.k : ""}${g.r ? " rev" : ""}" data-i="${i}" ${c.can_pick && !g.r ? "" : "disabled"}>${esc(g.w)}</button>`).join("") +
+      `</div>` + (c.can_pick ? `<button type="button" id="cspass">${t("csPass")}</button>` : "");
+  }
+  $("pad").addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const res = b.id === "cspass" ? await api("cs/pass", "POST", {}) : await api("cs/pick", "POST", { index: Number(b.dataset.i) });
+    let note = null;
+    try { note = (await res.json()).note; } catch (err) { /* nothing to show */ }
+    if (note) { const p = $("pad").querySelector(".padsub"); if (p) p.textContent = note; }
+    refresh();
+  });
+  $("tab-draw").addEventListener("click", () => { view = "draw"; onState(); });
+  $("tab-pad").addEventListener("click", () => { view = "pad"; onState(); });
 
   function tick() {
     $("clock").textContent = endsAt ? String(secs()) : "";
@@ -735,7 +808,7 @@
     dirty = final ? dirty : false;
     try {
       const blob = await new Promise((resolve) => cv.toBlob(resolve, "image/jpeg", 0.72));
-      const res = await api(final ? "bk/submit" : "bk/draft", "POST", blob);
+      const res = await api(final ? "bk/submit" + (st.bk && st.bk.number ? "?n=" + $("numsel").value : "") : "bk/draft", "POST", blob);
       if (final) {
         if (!res.ok) { const j = await res.json().catch(() => ({})); if (j.error === "bad_image") bkSubmitting = false; }
         await refresh();
