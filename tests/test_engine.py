@@ -1,6 +1,7 @@
 """Whole-match scenarios driven through the Engine with a fake clock."""
 import config
 import words
+from conftest import Env
 from engine import GameError
 from game import Phase, guess_points
 import pytest
@@ -708,3 +709,40 @@ def test_a_missing_bot_admin_right_is_pointed_out_for_speedrun_and_classic(env):
     env.db.add_dm(1)
     env.run(env.engine.new_game(env.CHAT, 1, "Ada", "it", "broken"))   # Broken Canva needs no deletions
     assert all("amministratore" not in m["text"] for m in env.io.sent[n:])
+
+
+# ---------------------------------------------------------------- /nextgame
+def test_nextgame_notifies_in_private_when_a_match_opens():
+    env = Env()
+    e, io = env.engine, env.io
+    env.db.track_chat(env.CHAT, "Gruppo Test")
+    env.db.add_dm(5)
+    env.run(e.nextgame(env.CHAT, 5, "Zoe", "it"))
+    assert any("🔔" in t for t in io.texts())
+    env.run(e.new_game(env.CHAT, 1, "Ada", "it", "classic"))
+    assert io.dms[-1]["user"] == 5 and "Gruppo Test" in io.dms[-1]["text"]
+    env.run(e.new_game(-2002, 2, "Bob", "it", "classic"))        # one-shot: consumed
+    assert len(io.dms) == 1
+
+
+def test_nextgame_again_cancels_and_needs_private_chat():
+    env = Env()
+    e, io = env.engine, env.io
+    env.run(e.nextgame(env.CHAT, 5, "Zoe", "it"))                # never started the bot
+    assert io.sent[-1]["buttons"]
+    env.db.add_dm(5)
+    env.run(e.nextgame(env.CHAT, 5, "Zoe", "it"))
+    env.run(e.nextgame(env.CHAT, 5, "Zoe", "it"))                # second time: cancelled
+    env.run(e.new_game(env.CHAT, 1, "Ada", "it", "classic"))
+    assert not io.dms
+
+
+def test_nextgame_expires_and_skips_those_already_in():
+    env = Env()
+    e, io = env.engine, env.io
+    for u in (5, 6):
+        env.db.add_dm(u)
+        env.run(e.nextgame(env.CHAT, u, f"U{u}", "it"))
+    env.db.con.execute("UPDATE nextgame SET ts = ts - ? WHERE user_id = 6", (config.NEXTGAME_HOURS * 3600 + 5,))
+    env.run(e.new_game(env.CHAT, 5, "U5", "it", "classic"))      # 5 opens it himself, 6 expired
+    assert not io.dms

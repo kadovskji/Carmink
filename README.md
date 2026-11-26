@@ -56,6 +56,7 @@ Guesses ignore case, accents, spaces and punctuation, and accept the synonyms li
 | `/newgame [it\|en]` | Open a match and pick the mode; the language is the group's, unless given |
 | `/join` | Join a match, also while it is running (you guess at once and draw at the end), unless the group turned it off in `/settings` |
 | `/ready` | Start now (any player, with at least 3 players) |
+| `/nextgame` | Get a private notice when the next match opens in the group, without being signed up (valid 24 hours; send it again to cancel; needs the bot started in private) |
 | `/wait <minutes>` | Extend the sign-up window (max 10 per use, decimals allowed) |
 | `/quit` | Leave the match |
 | `/stop` | Cancel the match (its creator or a group admin) |
@@ -146,4 +147,4 @@ Additional words were curated (filtered for drawability and translated) from use
 
 ## Test matches (bot owner)
 
-`/admin` → **🧪 Partita di test**: pick a mode and 3–8 fake players ("Test 1…N", 4+ for Broken Canva). The match runs in your private chat: group messages and the DMs of Broken Canva all arrive there, labelled with the player. Write as a player with `/t <n> <text>`; to draw or guess in the Mini App open it from the 🎨 button and pick the player from the yellow bar at the top. Test matches don't touch the statistics and can be ended any time from the same menu.
+`/admin` → **🧪 Partita di test**: pick a mode and 3–8 fake players ("Test 1…N", 4+ for Broken Canva). The match runs in your private chat: group messages and the DMs of Broken Canva all arrive there, labelled with the player. `/c` shows a panel of buttons for the running test: ❌/✅ wrong or correct guess per player (Speedrun, Classic), 🎲 a made-up phrase and 🖼 a quick random drawing per player or for all (Broken Canva), plus buttons to pick the word and start drawing. Write as a player with `/t <n> <text>`; to draw or guess in the Mini App open it from the 🎨 button and pick the player from the yellow bar at the top. Test matches don't touch the statistics and can be ended any time from the same menu.

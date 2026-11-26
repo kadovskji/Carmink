@@ -6,9 +6,11 @@ Messages are in Italian: the panel is for the bot owner only.
 """
 import asyncio
 import html
+import io
 import json
 import logging
 import os
+import random
 import sys
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -18,7 +20,8 @@ from telegram.ext import ContextTypes
 import config
 import logs
 from db import Database
-from engine import Engine
+from engine import Engine, GameError
+from game import Phase
 
 LOG = logging.getLogger("carmink.admin")
 
@@ -53,6 +56,123 @@ class Admin:
             return                                  # silent: the command doesn't "exist"
         self.pending.pop(user.id, None)
         text, kb = self._menu()
+        await update.message.reply_text(text, reply_markup=kb)
+
+    # ---------------------------------------------------------------- test match: control panel
+    SHAPES = ("triangolo", "cerchio", "quadrato", "stella", "rombo", "cuore", "croce")
+    COLORS = ("giallo", "rosso", "arancione", "blu", "verde", "viola", "rosa")
+
+    def _phrase(self) -> str:
+        """A short made-up phrase for Broken Canva: three shapes or three colours."""
+        return ", ".join(random.sample(random.choice((self.SHAPES, self.COLORS)), 3))
+
+    @staticmethod
+    def _quick_drawing() -> bytes:
+        """A small random drawing (coloured shapes) for Broken Canva tests."""
+        from PIL import Image, ImageDraw
+        img = Image.new("RGB", (400, 300), "white")
+        d = ImageDraw.Draw(img)
+        for _ in range(random.randint(2, 4)):
+            x, y = random.randint(20, 280), random.randint(20, 200)
+            w, h = random.randint(40, 110), random.randint(40, 90)
+            col = tuple(random.randint(0, 255) for _ in range(3))
+            random.choice((d.ellipse, d.rectangle))((x, y, x + w, y + h), fill=col, outline="black", width=3)
+        out = io.BytesIO()
+        img.save(out, "JPEG", quality=80)
+        return out.getvalue()
+
+    def _test_panel(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
+        """Buttons to play the fake players of the running test match."""
+        g = self.engine.games.get(uid)
+        refresh = InlineKeyboardButton("🔄 Aggiorna", callback_data="ad:tc")
+        end = InlineKeyboardButton("⏹ Termina test", callback_data="ad:testend")
+        if not g or not g.test:
+            return "🧪 Nessuna partita di test attiva.", InlineKeyboardMarkup(
+                [[InlineKeyboardButton("⬅️ Menu", callback_data="ad:menu")]])
+        rows: list[list[InlineKeyboardButton]] = []
+        name = lambda n: g.test_ids and f"Test {n}"        # noqa: E731
+        text = f"🧪 Test {g.mode} · fase: {g.phase.name.lower()}"
+        if g.mode == "broken":
+            bk = g.broken
+            if g.phase in (Phase.WRITING, Phase.STEP) and bk:
+                todo = [n for n, u in enumerate(g.test_ids, 1)
+                        if u in bk.order and u in g.players and u not in bk.inbox]
+                if g.phase == Phase.WRITING or bk.kind == "text":
+                    label, act = "🎲", "p"
+                    text += "\nScrivere una frase" if g.phase == Phase.WRITING else "\nDescrivere il disegno"
+                else:
+                    label, act = "🖼", "d"
+                    text += "\nDisegnare (oppure dalla Mini App)"
+                if todo:
+                    rows.append([InlineKeyboardButton(f"{label} Tutti ({len(todo)})",
+                                                      callback_data=f"ad:tx:{act}all:0")])
+                    rows += [[InlineKeyboardButton(f"{label} {name(n)}", callback_data=f"ad:tx:{act}:{n}")]
+                             for n in todo]
+                else:
+                    text += "\n(tutti hanno consegnato)"
+        elif g.turn and g.phase in (Phase.CHOOSING, Phase.STARTING, Phase.DRAWING):
+            t = g.turn
+            dn = g.test_ids.index(t.drawer) + 1 if t.drawer in g.test_ids else 0
+            text += f" · disegna Test {dn}"
+            if g.phase == Phase.CHOOSING:
+                rows.append([InlineKeyboardButton("🎯 Test %d sceglie la prima parola" % dn,
+                                                  callback_data="ad:tx:c:0")])
+            elif g.phase == Phase.STARTING:
+                rows.append([InlineKeyboardButton("▶️ Test %d inizia a disegnare" % dn,
+                                                  callback_data="ad:tx:s:0")])
+            else:
+                for n, u in enumerate(g.test_ids, 1):
+                    if u == t.drawer or u in t.guessed or u not in g.players:
+                        continue
+                    rows.append([InlineKeyboardButton(f"❌ Test {n} sbaglia", callback_data=f"ad:tx:w:{n}"),
+                                 InlineKeyboardButton(f"✅ Test {n} indovina", callback_data=f"ad:tx:r:{n}")])
+        else:
+            text += "\nNessuna azione disponibile ora: premi Aggiorna."
+        rows.append([refresh, end])
+        return text, InlineKeyboardMarkup(rows)
+
+    async def _test_action(self, uid: int, act: str, n: int) -> str:
+        """Run a panel button; returns a short note for the toast."""
+        g = self.engine.games.get(uid)
+        if not g or not g.test:
+            return "Nessun test attivo."
+        try:
+            if act == "c" and g.turn:
+                self.engine.choose(uid, g.turn.drawer, 0)
+            elif act == "s" and g.turn:
+                await self.engine.start_drawing(uid, g.turn.drawer)
+            elif act in ("w", "r") and g.turn:
+                word = g.turn.word.word if act == "r" else f"qzx{random.randint(100, 999)}"
+                return await self.engine.act_as(uid, n, word) or "ok"
+            elif act == "p":
+                return await self.engine.act_as(uid, n, self._phrase()) or "ok"
+            elif act == "pall" and g.broken:
+                for k, u in enumerate(g.test_ids, 1):
+                    if u in g.broken.order and u not in g.broken.inbox and self.engine.games.get(uid) is g:
+                        await self.engine.act_as(uid, k, self._phrase())
+            elif act in ("d", "dall") and g.broken and g.broken.kind == "draw":
+                for k, u in enumerate(g.test_ids, 1):
+                    if (act == "d" and k != n) or u not in g.broken.order or u in g.broken.inbox:
+                        continue
+                    if self.engine.games.get(uid) is g and g.phase == Phase.STEP:
+                        await self.engine.bk_submit(uid, u, self._quick_drawing())
+        except GameError as e:
+            return f"Errore: {e.code}"
+        return "ok"
+
+    async def _show_panel(self, q, uid: int) -> None:
+        text, kb = self._test_panel(uid)
+        try:
+            await q.edit_message_text(text, reply_markup=kb)
+        except TelegramError:                           # "message is not modified"
+            pass
+
+    async def test_panel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """/c: a fresh control panel at the bottom of the chat."""
+        chat, user = update.effective_chat, update.effective_user
+        if chat.type != "private" or not self.is_bot_admin(user.id):
+            return
+        text, kb = self._test_panel(user.id)
         await update.message.reply_text(text, reply_markup=kb)
 
     async def test_say(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -127,8 +247,9 @@ class Admin:
                     [InlineKeyboardButton("⬅️ Menu", callback_data="ad:menu")]])
                 await q.edit_message_text(
                     f"🧪 Test in corso ({g.mode}, {len(g.test_ids)} giocatori finti).\n"
-                    "Gioca come Test N con /t N testo, oppure dalla Mini App scegliendo il giocatore.",
-                    reply_markup=kb)
+                    "Pulsanti: /c · testo: /t N testo · Mini App: barra gialla.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🎛 Pannello", callback_data="ad:tc")]] + list(kb.inline_keyboard)))
             else:
                 rows = [[InlineKeyboardButton(f"{emoji} {name}", callback_data=f"ad:testmode:{mode}")]
                         for mode, emoji, name in (("speedrun", "⚡", "Speedrun"),
@@ -159,10 +280,22 @@ class Admin:
                                           reply_markup=self._back())
                 return
             await q.edit_message_text(
-                "🧪 Partita di test avviata. Comandi: /t N testo (scrive come Test N). "
-                "Per disegnare, apri la Mini App dal pulsante e scegli il giocatore.",
+                "🧪 Partita di test avviata.\n/c = pannello con i pulsanti (indovina, frase, disegno…)\n"
+                "/t N testo = scrive come Test N\nMini App: scegli il giocatore dalla barra gialla.",
                 reply_markup=self._back())
             await self.engine.new_test_game(uid, "it", mode, int(n))
+            text, kb = self._test_panel(uid)
+            await ctx.bot.send_message(uid, text, reply_markup=kb)
+
+        elif action == "tc":
+            await self._show_panel(q, uid)
+
+        elif action.startswith("tx:"):
+            _, act, n = action.split(":")
+            note = await self._test_action(uid, act, int(n) if n.isdigit() else 0)
+            if note != "ok":
+                await q.answer(note[:180])
+            await self._show_panel(q, uid)
 
         elif action == "testend":
             await self.engine.end_test(uid)

@@ -55,6 +55,7 @@ BROKEN_GIF_GAP = 1.0        # pause between two GIFs sent to the group (Telegram
 
 # ---------------------------------------------------------------- timings, in seconds
 LOBBY_SECONDS = 300         # sign-up window
+NEXTGAME_HOURS = 24         # /nextgame requests expire after this long
 WAIT_MAX_MINUTES = 10       # max extension per /wait
 BREAK_SECONDS = 10          # pause between two turns (the next drawer is announced)
 CHOOSE_SECONDS = 10         # the drawer must pick one of the three words

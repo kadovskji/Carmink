@@ -11,6 +11,7 @@
   <header id="bar">
     <span id="info"></span>
     <span id="clock"></span>
+    <button id="fs" hidden title="fullscreen">⛶</button>
   </header>
 
   <div id="testbar" hidden></div>
@@ -25,16 +26,20 @@
 
     <section id="board" hidden>
       <div id="word"></div>
-      <div id="stage">
-        <canvas id="cv" width="800" height="600"></canvas>
+      <div id="play">
+        <div id="stage">
+          <canvas id="cv" width="800" height="600"></canvas>
+        </div>
+        <div id="side">
+          <div id="attempts" hidden></div>
+          <form id="guessbar" hidden autocomplete="off">
+            <input id="guess" type="text" maxlength="60" enterkeyhint="send" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+            <button id="send" type="submit"></button>
+          </form>
+          <div id="flash"></div>
+          <div id="mine" hidden></div>
+        </div>
       </div>
-      <div id="attempts" hidden></div>
-      <form id="guessbar" hidden autocomplete="off">
-        <input id="guess" type="text" maxlength="60" enterkeyhint="send" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
-        <button id="send" type="submit"></button>
-      </form>
-      <div id="flash"></div>
-      <div id="mine" hidden></div>
     </section>
   </main>
 

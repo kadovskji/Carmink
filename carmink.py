@@ -36,6 +36,7 @@ COMMANDS = [
     ("newgame", "Open a new match", "Apri una nuova partita"),
     ("join", "Join the match", "Unisciti alla partita"),
     ("ready", "Start the match now", "Avvia subito la partita"),
+    ("nextgame", "Get notified when the next match opens (again: cancel)", "Ricevi un avviso all'apertura della prossima partita (di nuovo: annulla)"),
     ("wait", "Extend sign-ups: /wait <minutes>", "Prolunga le iscrizioni: /wait <minuti>"),
     ("quit", "Leave the match", "Lascia la partita"),
     ("stop", "Cancel the match", "Annulla la partita"),
@@ -67,13 +68,14 @@ def register(app: Application, h: Handlers, admin: Admin) -> None:
             name, handler, filters=explicit if name in config.REQUIRE_TAG else None))
 
     for name, handler in (("start", h.start), ("help", h.help), ("newgame", h.newgame), ("join", h.join),
-                          ("ready", h.ready), ("wait", h.wait), ("quit", h.quit),
+                          ("ready", h.ready), ("nextgame", h.nextgame), ("wait", h.wait), ("quit", h.quit),
                           ("stop", h.stop), ("addword", h.addword),
                           ("deleteword", h.deleteword), ("stats", h.stats),
                           ("mystats", h.mystats), ("settings", h.settings)):
         command(name, handler)
     app.add_handler(CommandHandler("admin", admin.admin, filters=filters.ChatType.PRIVATE))
     app.add_handler(CommandHandler("t", admin.test_say, filters=filters.ChatType.PRIVATE))
+    app.add_handler(CommandHandler("c", admin.test_panel, filters=filters.ChatType.PRIVATE))
 
     app.add_handler(CallbackQueryHandler(h.cb_settings, pattern=r"^s:"))
     app.add_handler(CallbackQueryHandler(h.cb_mode, pattern=r"^m:"))

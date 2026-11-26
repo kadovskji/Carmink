@@ -110,3 +110,69 @@ def test_mini_app_impersonation_only_for_admin():
     # unknown fake id is ignored
     bad = {**init(), "X-Test-As": "42"}
     assert c.get("/api/state", headers=bad).json()["in_game"] is False
+
+
+# ---------------------------------------------------------------- control panel (buttons)
+def make_admin(env):
+    import sys
+    import test_handlers  # noqa: F401  (installs the telegram stand-in when the library is missing)
+    tg, err = sys.modules["telegram"], sys.modules["telegram.error"]
+    if not getattr(tg, "__file__", None):               # stand-in: give it what admin.py needs
+        class Button:
+            def __init__(self, text, callback_data=None, url=None):
+                self.text, self.callback_data, self.url = text, callback_data, url
+
+        class Markup:
+            def __init__(self, rows):
+                self.inline_keyboard = rows
+
+        tg.InlineKeyboardButton, tg.InlineKeyboardMarkup = Button, Markup
+        err.Forbidden = err.TelegramError
+    from admin import Admin
+    return Admin(env.db, env.engine)
+
+
+def test_panel_buttons_play_speedrun_round():
+    env = Env()
+    a = make_admin(env)
+    g = start(env, "speedrun", 3)
+    env.run(env.io.advance(config.BREAK_SECONDS))
+    assert "sceglie" in a._test_panel(ADMIN)[1].inline_keyboard[0][0].text
+    env.run(a._test_action(ADMIN, "c", 0))
+    env.run(a._test_action(ADMIN, "s", 0))
+    assert g.phase == Phase.DRAWING
+    n = next(i for i, u in enumerate(g.test_ids, 1) if u != g.turn.drawer)
+    env.run(a._test_action(ADMIN, "w", n))
+    assert g.phase == Phase.DRAWING
+    env.run(a._test_action(ADMIN, "r", n))
+    assert g.scores[g.test_ids[n - 1]] > 0
+
+
+def test_panel_buttons_play_classic_round():
+    env = Env()
+    a = make_admin(env)
+    g = start(env, "classic", 3)
+    env.run(env.io.advance(config.BREAK_SECONDS))
+    env.run(a._test_action(ADMIN, "c", 0))
+    env.run(a._test_action(ADMIN, "s", 0))
+    n = next(i for i, u in enumerate(g.test_ids, 1) if u != g.turn.drawer)
+    env.run(a._test_action(ADMIN, "r", n))
+    assert g.test_ids[n - 1] in g.turn.guessed
+    rows = a._test_panel(ADMIN)[1].inline_keyboard
+    assert all(f"Test {n} " not in b.text for r in rows for b in r)      # already guessed
+
+
+def test_panel_buttons_play_a_whole_broken_game(monkeypatch):
+    env = Env()
+    a = make_admin(env)
+    g = start(env, "broken", 4)
+    env.run(a._test_action(ADMIN, "pall", 0))
+    assert g.broken.step == 1 and g.broken.kind == "draw"
+    for _ in range(g.broken.steps):
+        act = "dall" if g.broken.kind == "draw" else "pall"
+        env.run(a._test_action(ADMIN, act, 0))
+    assert ADMIN not in env.engine.games
+    assert any("triangolo" in x or "giallo" in x or "cerchio" in x or "rosso" in x
+               or "quadrato" in x or "arancione" in x or "stella" in x or "blu" in x
+               or "rombo" in x or "verde" in x or "cuore" in x or "viola" in x
+               or "croce" in x or "rosa" in x for x in env.io.texts()) or env.io.animations

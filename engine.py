@@ -213,6 +213,28 @@ class Engine(BrokenMixin):
         await self.io.send(chat_id, text, self._start_button(g) if mode == "broken" else None)
         if mode != "broken" and not await self.io.can_delete(chat_id):
             await self.io.send(chat_id, T(lang, "need_admin_note"), [admin_button(lang)])
+        await self._notify_nextgame(g)
+
+    async def _notify_nextgame(self, g: Game) -> None:
+        """The lobby is open: tell in private who asked with /nextgame (they still have to /join)."""
+        for uid, _name in self.db.nextgame_take(g.chat_id, config.NEXTGAME_HOURS * 3600):
+            if uid not in g.players:
+                await self.io.send_dm(uid, T(g.lang, "nextgame_dm", chat=esc(self.db.chat_title(g.chat_id)),
+                                             mode=T(g.lang, f"mode_{g.mode}"),
+                                             minutes=config.LOBBY_SECONDS // 60))
+
+    async def nextgame(self, chat_id: int, uid: int, name: str, lang: str) -> None:
+        """/nextgame: a private notice when the next match opens here (again: cancel)."""
+        g = self.games.get(chat_id)
+        if g and g.phase == Phase.LOBBY:
+            return await self._say(chat_id, g.lang, "nextgame_lobby_open")
+        if not self.db.has_dm(uid):
+            return await self.io.send(chat_id, T(lang, "nextgame_need_dm"),
+                                      [(T(lang, "btn_start_bot"), self._bot_url(f"j{abs(chat_id)}"))])
+        if self.db.nextgame_toggle(chat_id, uid, name):
+            await self._say(chat_id, lang, "nextgame_on", name=esc(name), hours=config.NEXTGAME_HOURS)
+        else:
+            await self._say(chat_id, lang, "nextgame_off", name=esc(name))
 
     async def join(self, chat_id: int, uid: int, name: str, lang: str) -> None:
         g = self.games.get(chat_id)

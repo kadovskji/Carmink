@@ -91,6 +91,8 @@
   let st = { phase: "none" };
   let endsAt = 0;
   let turnKey = null;
+  const stash = {};                 // canvases of the fake players of a test match (see onState)
+  let stashKey = null, stashTurn = null, stashDraw = false;
   let asUid = null;                 // test match: the fake player the admin is playing now
   let startSent = false;
   let msgFn = null;
@@ -147,7 +149,18 @@
     renderTestBar();
     const key = st.turn != null ? String(st.turn) + "|" + (asUid || "") : null;
     if (key !== turnKey) {
+      // test matches: each fake player keeps its own canvas while the admin plays someone else
+      if (stashKey && stashDraw) stash[stashKey] = { ops: clone(board.ops), undone: clone(board.undone),
+        evLog: clone(evLog), evSent, dirty, startSent };
+      const turnPart = key ? key.split("|")[0] : null;
+      if (turnPart !== stashTurn) for (const k of Object.keys(stash)) delete stash[k];
+      stashTurn = turnPart; stashKey = key;
       turnKey = key; resetCanvas(); startSent = false; resetLive(); clearAttempts(); bkSubmitting = false;
+      const saved = key && stash[key];
+      if (saved) {
+        board.ops = saved.ops; board.undone = saved.undone; evLog = saved.evLog; evSent = saved.evSent;
+        dirty = saved.dirty; startSent = saved.startSent; redraw(); updateUndo();
+      }
     }
 
     const phase = st.phase, drawer = st.role === "drawer";
@@ -189,6 +202,7 @@
       else msgFn = () => t(st.bk.kind === "draw" ? "bkWait" : (phase === "writing" ? "bkWrite" : "bkDescribe"), { s: secs() });
     }
 
+    stashDraw = canvasOn;
     if (drawer && phase === "choosing") renderChoices();
     fitLayout();
     if (st.final && drawer) sendFinal();
@@ -324,7 +338,12 @@
   // The canvas is as large as the free area allows, 4:3. Done here and not only in CSS because
   // desktop webviews can lack dvh / aspect-ratio, and the window there can be resized freely.
   function fitLayout() {
-    document.body.style.height = (window.innerHeight || document.documentElement.clientHeight) + "px";
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    document.body.style.height = vh + "px";
+    // landscape (iPad, a phone on its side, a desktop window): tools and attempts go to the side, so
+    // the canvas can use the whole height
+    document.body.classList.toggle("wide", vw >= 520 && vw >= vh * 1.15);
     const stage = $("stage");
     if ($("board").hidden || !stage) return;
     const aw = stage.clientWidth, ah = stage.clientHeight;
@@ -332,6 +351,20 @@
     const w = Math.floor(Math.min(aw, ah * 4 / 3));
     cv.style.width = w + "px";
     cv.style.height = Math.floor(w * 3 / 4) + "px";
+  }
+  // Telegram's full screen (Bot API 8.0+): a button, so it is the player's choice
+  const fsBtn = $("fs");
+  function safeTop() {
+    const a = (tg && tg.safeAreaInset && tg.safeAreaInset.top) || 0, b = (tg && tg.contentSafeAreaInset && tg.contentSafeAreaInset.top) || 0;
+    document.documentElement.style.setProperty("--safe-top", (tg && tg.isFullscreen ? a + b : 0) + "px");
+    fitLayout();
+  }
+  if (tg && tg.requestFullscreen && (!tg.isVersionAtLeast || tg.isVersionAtLeast("8.0"))) {
+    fsBtn.hidden = false;
+    fsBtn.addEventListener("click", () => {
+      try { if (tg.isFullscreen) tg.exitFullscreen(); else tg.requestFullscreen(); } catch (e) { fsBtn.hidden = true; }
+    });
+    for (const ev of ["fullscreenChanged", "safeAreaChanged", "contentSafeAreaChanged"]) tg.onEvent(ev, safeTop);
   }
   window.addEventListener("resize", fitLayout);
   window.addEventListener("orientationchange", () => setTimeout(fitLayout, 150));
@@ -400,13 +433,27 @@
   // lost, pointer capture refused by a desktop webview): it is closed by any sign that it is over,
   // and a new press closes a stale one instead of being ignored.
   let activeId = null, lastMove = 0, lastPt = null;
+  // Apple Pencil: the palm resting on the glass is a touch pointer. While the pencil is in use touches
+  // don't draw, and a pencil stroke always wins over a finger stroke that began a moment before.
+  let lastPen = 0, activeType = "", activeStart = 0;
+  const PALM_MS = 2500;
+  const penSeen = (e) => { if (e.pointerType === "pen") lastPen = Date.now(); };
+  cv.addEventListener("pointerover", penSeen);
+  cv.addEventListener("pointermove", penSeen);                // also the hovering pencil (newer iPads)
+  cv.addEventListener("contextmenu", (e) => e.preventDefault());   // a long press must not cancel the stroke
   cv.addEventListener("pointerdown", (e) => {
     if (!canDraw()) return;
+    penSeen(e);
+    if (e.pointerType === "touch" && Date.now() - lastPen < PALM_MS) return;     // palm
     if (board.cur) {
-      if (e.pointerId !== activeId && Date.now() - lastMove < 600) return;    // a second finger
-      endStroke();                                                            // stale stroke
+      const pen = e.pointerType === "pen";
+      if (!pen && e.pointerId !== activeId && Date.now() - lastMove < 600) return;    // a second finger
+      const palm = pen && activeType === "touch" && Date.now() - activeStart < 1500;
+      endStroke();                                                                    // stale stroke
+      if (palm) local({ e: "undo" }, true);                                           // ...or a palm
     }
     e.preventDefault();
+    activeType = e.pointerType; activeStart = Date.now();
     activeId = e.pointerId; lastMove = Date.now();
     try { cv.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or lost pointer */ }
     if (!startSent && st.phase === "starting") {

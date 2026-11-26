@@ -26,14 +26,14 @@ STRINGS: dict[str, dict[str, str]] = {
               "Il disegnatore di turno ha pochi minuti per disegnare la parola che sceglie tra tre, gli altri provano a "
               "indovinarla (in chat o nella Mini App, secondo la modalità). Più sei veloce, più punti prendi; il disegnatore guadagna di più se "
               "indovinano in tanti.\n\n"
-              "<b>Comandi</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
+              "<b>Comandi</b>\n/newgame · /join · /ready · /nextgame · /wait &lt;minuti&gt; · /quit · /stop\n"
               "/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt; · /stats · /mystats · /settings\n\n"
               "Nel gruppo rendimi amministratore (con il permesso di eliminare i messaggi), altrimenti non vedo i tentativi e non posso cancellare le risposte.",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\nAdd me to a group and type /newgame. "
               "The current drawer has a few minutes to draw a word picked among three, the others try to guess it "
               "in the chat or in the Mini App, depending on the mode. The faster you guess, the more points you get; the drawer earns more when "
               "many players guess.\n\n"
-              "<b>Commands</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
+              "<b>Commands</b>\n/newgame · /join · /ready · /nextgame · /wait &lt;minutes&gt; · /quit · /stop\n"
               "/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt; · /stats · /mystats · /settings\n\n"
               "In the group make me an admin (with the permission to delete messages), or I can't see the guesses and can't delete the answers.",
     },
@@ -48,6 +48,7 @@ STRINGS: dict[str, dict[str, str]] = {
               "☎️ <b>Broken Canva</b>: telefono senza fili; ognuno scrive in privato una frase, poi frasi e disegni passano di mano in mano. "
               "Nessun vincitore, alla fine arrivano le GIF. Servono 4 giocatori che abbiano avviato il bot in privato.\n\n"
               "<b>Partita</b>\n/newgame · /join · /ready · /wait &lt;minuti&gt; · /quit · /stop\n"
+              "<b>Avviso</b>\n/nextgame: ti scrivo in privato quando si apre la prossima partita (24 ore, dovrai comunque fare /join; rimandalo per annullare)\n"
               "<b>Dizionario del gruppo</b>\n/addword &lt;parola&gt; [| sinonimo…] [1-3] · /deleteword &lt;parola&gt;\n"
               "<b>Altro</b>\n/stats · /mystats · /settings · /help",
         "en": "🎨 <b>Carmink</b>: draw, the others guess!\n\n"
@@ -60,6 +61,7 @@ STRINGS: dict[str, dict[str, str]] = {
               "☎️ <b>Broken Canva</b>: telephone game; everybody privately writes a phrase, then phrases and drawings are passed around. "
               "Nobody wins, GIFs come at the end. Needs 4 players who have started the bot in private.\n\n"
               "<b>Match</b>\n/newgame · /join · /ready · /wait &lt;minutes&gt; · /quit · /stop\n"
+              "<b>Notice</b>\n/nextgame: I message you in private when the next match opens (24 hours, you still have to /join; send it again to cancel)\n"
               "<b>Group dictionary</b>\n/addword &lt;word&gt; [| synonym…] [1-3] · /deleteword &lt;word&gt;\n"
               "<b>Other</b>\n/stats · /mystats · /settings · /help",
     },
@@ -226,6 +228,24 @@ STRINGS.update({
         "en": "☎️ <b>Broken Canva</b>: everybody privately sends the bot a funny phrase; then phrases turn into "
               "drawings and drawings into descriptions, passed from hand to hand. Nobody wins, GIFs come at the end!\n"
               "To join you must have started the bot in private: if /join isn't enough, use the button.",
+    },
+    "nextgame_on": {
+        "it": "🔔 {name}, ti scriverò in privato quando si aprirà la prossima partita in questo gruppo (dovrai comunque fare /join). "
+              "Rimanda /nextgame per annullare. (Valido per {hours} ore.)",
+        "en": "🔔 {name}, I'll message you in private when the next match opens in this group (you'll still need to /join). "
+              "Send /nextgame again to cancel. (Valid for {hours} hours.)",
+    },
+    "nextgame_off": {"it": "↩️ {name}, l'avviso per la prossima partita è annullato.",
+                     "en": "↩️ {name}, the notification for the next match is cancelled."},
+    "nextgame_lobby_open": {"it": "C'è già una partita in attesa di giocatori: usa /join.",
+                            "en": "A match is already waiting for players: use /join."},
+    "nextgame_dm": {
+        "it": "🔔 Sta aprendo una nuova partita {mode} in «{chat}»! Le iscrizioni durano {minutes} minuti: vai nel gruppo e scrivi /join.",
+        "en": "🔔 A new {mode} match is opening in “{chat}”! Sign-ups last {minutes} minutes: go to the group and send /join.",
+    },
+    "nextgame_need_dm": {
+        "it": "🔔 Per ricevere l'avviso devo poterti scrivere in privato: tocca il pulsante, premi <b>Avvia</b> e poi rimanda /nextgame.",
+        "en": "🔔 To send you the notice I must be able to write to you in private: tap the button, press <b>Start</b>, then send /nextgame again.",
     },
     "bk_need_dm": {
         "it": "☎️ Per Broken Canva ogni giocatore deve prima aprire il bot in privato (altrimenti non posso scrivergli). "

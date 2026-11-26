@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS game_players (
 CREATE TABLE IF NOT EXISTS dm_users (            -- people who opened the bot in private: it may write to them
     user_id INTEGER PRIMARY KEY,
     ts INTEGER);
+CREATE TABLE IF NOT EXISTS nextgame (            -- /nextgame: who wants a private notice when a match opens
+    chat_id INTEGER, user_id INTEGER, name TEXT, ts INTEGER,
+    PRIMARY KEY (chat_id, user_id));
 CREATE INDEX IF NOT EXISTS idx_games_chat ON games(chat_id);
 CREATE INDEX IF NOT EXISTS idx_gp_chat ON game_players(chat_id);
 CREATE INDEX IF NOT EXISTS idx_gp_user ON game_players(user_id);
@@ -106,6 +109,30 @@ class Database:
             "ON CONFLICT(chat_id) DO UPDATE SET active = excluded.active, "
             "title = COALESCE(excluded.title, title)", (chat_id, title, int(active)))
         self.con.commit()
+
+    def chat_title(self, chat_id: int) -> str:
+        rows = self.query("SELECT title FROM known_chats WHERE chat_id = ?", (chat_id,))
+        return (rows[0][0] if rows and rows[0][0] else "") or ""
+
+    # ------------------------------------------------------------ /nextgame
+    def nextgame_toggle(self, chat_id: int, user_id: int, name: str) -> bool:
+        """Ask for the notice, or cancel it. True = now registered."""
+        if self.query("SELECT 1 FROM nextgame WHERE chat_id = ? AND user_id = ?", (chat_id, user_id)):
+            self.con.execute("DELETE FROM nextgame WHERE chat_id = ? AND user_id = ?", (chat_id, user_id))
+            self.con.commit()
+            return False
+        self.con.execute("INSERT INTO nextgame (chat_id, user_id, name, ts) VALUES (?, ?, ?, ?)",
+                         (chat_id, user_id, name, int(time.time())))
+        self.con.commit()
+        return True
+
+    def nextgame_take(self, chat_id: int, max_age: float) -> list[tuple[int, str]]:
+        """The valid requests of a group; all of them (expired ones too) are consumed."""
+        rows = self.query("SELECT user_id, name FROM nextgame WHERE chat_id = ? AND ts >= ? ORDER BY ts",
+                          (chat_id, int(time.time() - max_age)))
+        self.con.execute("DELETE FROM nextgame WHERE chat_id = ?", (chat_id,))
+        self.con.commit()
+        return [(r[0], r[1]) for r in rows]
 
     def chats_by_lang(self, lang: str) -> list[int]:
         rows = self.query(

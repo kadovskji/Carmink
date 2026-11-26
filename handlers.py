@@ -110,6 +110,11 @@ class Handlers:
             chat, user = update.effective_chat, update.effective_user
             await self.engine.join(chat.id, user.id, user.first_name, self._lang(chat.id))
 
+    async def nextgame(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if await self._group(update):
+            chat, user = update.effective_chat, update.effective_user
+            await self.engine.nextgame(chat.id, user.id, user.first_name, self._lang(chat.id))
+
     async def ready(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if await self._group(update):
             chat, user = update.effective_chat, update.effective_user
